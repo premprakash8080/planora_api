@@ -1,0 +1,79 @@
+{
+  "users": [
+    {
+      "full_name": "Admin User",
+      "email": "admin@planora.com",
+      "password": "admin123",
+      "initials": "AU",
+      "avatar_color": "#3b82f6",
+      "status": "active"
+    }
+  ],
+  "teams": [
+    {
+      "name": "Development Team",
+      "description": "Main development team for Planora project"
+    }
+  ],
+  "projects": [
+    {
+      "name": "Planora Task Management",
+      "description": "Main project for Planora task management system",
+      "color": "#3b82f6",
+      "status": "in-progress"
+    }
+  ],
+  "sections": [
+    {
+      "name": "To Do",
+      "position": 0
+    },
+    {
+      "name": "In Progress",
+      "position": 1
+    },
+    {
+      "name": "Done",
+      "position": 2
+    }
+  ],
+  "tasks": [
+    {
+      "title": "Set up development environment",
+      "description": "Configure local development environment with all necessary tools",
+      "priority": "High",
+      "status": "To Do",
+      "completed": false,
+      "position": 0,
+      "section_index": 0
+    },
+    {
+      "title": "Design database schema",
+      "description": "Create comprehensive database schema for task management",
+      "priority": "High",
+      "status": "To Do",
+      "completed": false,
+      "position": 1,
+      "section_index": 0
+    },
+    {
+      "title": "Implement authentication system",
+      "description": "Build JWT-based authentication with user registration and login",
+      "priority": "Medium",
+      "status": "In Progress",
+      "completed": false,
+      "position": 0,
+      "section_index": 1
+    },
+    {
+      "title": "Create API documentation",
+      "description": "Document all API endpoints with examples",
+      "priority": "Low",
+      "status": "Done",
+      "completed": true,
+      "position": 0,
+      "section_index": 2
+    }
+  ]
+}
+
