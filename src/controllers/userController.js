@@ -3,7 +3,9 @@ const { User } = require('../models');
 const { issueJWT } = require('../utils/issueJWT');
 
 // Register new user
-exports.register = async (req, res) => {
+
+const userController = () => {
+const register = async (req, res) => {
   try {
     const { full_name, email, password } = req.body;
 
@@ -74,7 +76,7 @@ exports.register = async (req, res) => {
 };
 
 // Login user
-exports.login = async (req, res) => {
+const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -137,7 +139,7 @@ exports.login = async (req, res) => {
 };
 
 // Get current user profile
-exports.getProfile = async (req, res) => {
+const getProfile = async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id, {
       attributes: { exclude: ['password_hash', 'deleted_at'] },
@@ -164,7 +166,7 @@ exports.getProfile = async (req, res) => {
 };
 
 // Update user profile
-exports.updateProfile = async (req, res) => {
+const updateProfile = async (req, res) => {
   try {
     const { full_name, avatar_url, avatar_color } = req.body;
     const user = await User.findByPk(req.user.id);
@@ -215,4 +217,14 @@ exports.updateProfile = async (req, res) => {
     });
   }
 };
+
+return {
+  register,
+  login,
+  getProfile,
+  updateProfile,
+};
+
+}
+module.exports = userController;
 
