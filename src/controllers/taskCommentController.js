@@ -1,7 +1,8 @@
 const { TaskComment, Task, User } = require('../models');
 
-// Get all comments for a task
-exports.getTaskComments = async (req, res) => {
+const taskCommentController = () => {
+  // Get all comments for a task
+  const getTaskComments = async (req, res) => {
   try {
     const { taskId } = req.params;
 
@@ -31,7 +32,7 @@ exports.getTaskComments = async (req, res) => {
 };
 
 // Get comment by ID
-exports.getCommentById = async (req, res) => {
+  const getCommentById = async (req, res) => {
   try {
     const { commentId } = req.params;
 
@@ -67,7 +68,7 @@ exports.getCommentById = async (req, res) => {
 };
 
 // Create new comment
-exports.createComment = async (req, res) => {
+  const createComment = async (req, res) => {
   try {
     const { task_id, message } = req.body;
     const user_id = req.user.id;
@@ -114,7 +115,7 @@ exports.createComment = async (req, res) => {
 };
 
 // Update comment
-exports.updateComment = async (req, res) => {
+  const updateComment = async (req, res) => {
   try {
     const { commentId } = req.params;
     const { message } = req.body;
@@ -163,7 +164,7 @@ exports.updateComment = async (req, res) => {
 };
 
 // Delete comment
-exports.deleteComment = async (req, res) => {
+  const deleteComment = async (req, res) => {
   try {
     const { commentId } = req.params;
     const user_id = req.user.id;
@@ -200,3 +201,12 @@ exports.deleteComment = async (req, res) => {
   }
 };
 
+return {
+  getTaskComments,
+  getCommentById,
+  createComment,
+  updateComment,
+  deleteComment,
+};
+};
+module.exports = taskCommentController;

@@ -1,8 +1,9 @@
 const { Project, Section, Task, User, ProjectMember, ProjectFavorite } = require('../models');
 const { Op } = require('sequelize');
 
-// Get all projects
-exports.getProjects = async (req, res) => {
+const projectController = () => {
+  // Get all projects
+  const getProjects = async (req, res) => {
   try {
     const userId = req.user.id;
     const { includeArchived } = req.query;
@@ -40,7 +41,7 @@ exports.getProjects = async (req, res) => {
 };
 
 // Get project by ID
-exports.getProjectById = async (req, res) => {
+  const getProjectById = async (req, res) => {
   try {
     const { projectId } = req.params;
     const userId = req.user.id;
@@ -71,7 +72,7 @@ exports.getProjectById = async (req, res) => {
 };
 
 // Create new project
-exports.createProject = async (req, res) => {
+  const createProject = async (req, res) => {
   try {
     const { name, description, color, team_id, status, due_date } = req.body;
     const created_by = req.user.id;
@@ -100,7 +101,7 @@ exports.createProject = async (req, res) => {
 };
 
 // Update project
-exports.updateProject = async (req, res) => {
+  const updateProject = async (req, res) => {
   try {
     const { projectId } = req.params;
     const updateData = req.body;
@@ -125,7 +126,7 @@ exports.updateProject = async (req, res) => {
 };
 
 // Delete project (soft delete)
-exports.deleteProject = async (req, res) => {
+  const deleteProject = async (req, res) => {
   try {
     const { projectId } = req.params;
     const project = await Project.findByPk(projectId);
@@ -141,7 +142,7 @@ exports.deleteProject = async (req, res) => {
 };
 
 // Toggle project favorite
-exports.toggleProjectFavorite = async (req, res) => {
+  const toggleProjectFavorite = async (req, res) => {
   try {
     const { projectId } = req.params;
     const userId = req.user.id;
@@ -165,3 +166,13 @@ exports.toggleProjectFavorite = async (req, res) => {
   }
 };
 
+return {
+  getProjects,
+  getProjectById,
+  createProject,
+  updateProject,
+  deleteProject,
+  toggleProjectFavorite,
+};
+};
+module.exports = projectController;
