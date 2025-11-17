@@ -4,13 +4,15 @@ const userController = require('../controllers/userController');
 const { authenticate } = require('../middleware/auth');
 const { validateUserRegistration, validateUserLogin } = require('../middleware/validator');
 
+const { register, login, getProfile, updateProfile } = userController();
+
 // Public routes
-router.post('/register', validateUserRegistration, userController.register);
-router.post('/login', validateUserLogin, userController.login);
+router.post('/register', validateUserRegistration, register);
+router.post('/login', validateUserLogin, login);
 
 // Protected routes
-router.get('/profile', authenticate, userController.getProfile);
-router.put('/profile', authenticate, userController.updateProfile);
+router.get('/profile', authenticate, getProfile);
+router.put('/profile', authenticate, updateProfile);
 
 module.exports = router;
 

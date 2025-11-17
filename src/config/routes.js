@@ -5,7 +5,6 @@
 exports.set_routes = (app) => {
   // User routes (public: register/login, protected: profile)
   const users = require("../routes/users");
-  
   // Task Management Routes (all protected)
   const projects = require("../routes/projects");
   const tasks = require("../routes/tasks");
