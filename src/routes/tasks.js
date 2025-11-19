@@ -10,7 +10,6 @@ router.use(authenticate);
 
 // Task routes
 // IMPORTANT: Specific routes must come before parameterized routes
-router.get('/getdashboardtaskcount', getTaskDashboardCounts);
 router.get('/get-task-by-project/:projectId', getTasksByProject);
 router.get('/gettaskbyid/:taskId', getTaskById);
 router.post('/createtask', createTask);

@@ -238,23 +238,7 @@ const taskController = () => {
   };
 
   // Get task dashboard details (task status upcoming, overdue, in progress, done) count
-  const getTaskDashboardCounts = async (req, res) => {
-    try {
-      const tasks = await Task.findAll({ where: { deleted_at: null } }); // Note: parent_id column doesn't exist in database
-      const upcomingTasks = tasks.filter(task => task.status === 'To Do' && task.due_date && new Date(task.due_date) > new Date());
-      const overdueTasks = tasks.filter(task => task.status === 'To Do' && task.due_date && new Date(task.due_date) < new Date());
-      const inProgressTasks = tasks.filter(task => task.status === 'In Progress');
-      const doneTasks = tasks.filter(task => task.status === 'Done');
-      res.json(successResponse({
-        upcomingTasks: upcomingTasks.length,
-        overdueTasks: overdueTasks.length,
-        inProgressTasks: inProgressTasks.length,
-        doneTasks: doneTasks.length
-      }));
-    } catch (error) {
-      res.status(500).json(errorResponse('Failed to fetch task dashboard counts', 500));
-    }
-  };
+
 
   // Batch update tasks (for drag-and-drop reordering, etc.)
   const batchUpdateTasks = async (req, res) => {
@@ -289,7 +273,6 @@ const taskController = () => {
     updateTask,
     deleteTask,
     toggleTaskCompletion,
-    getTaskDashboardCounts,
     batchUpdateTasks,
   };
 };

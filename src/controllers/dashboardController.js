@@ -1,5 +1,6 @@
 const { Task, Project, NoticeBoard } = require('../models');
 const { Op } = require('sequelize');
+const { successResponse, errorResponse } = require('../utils/responseFormatter');
 
 const dashboardController = () => {
   // Get monthly statistics
@@ -112,11 +113,30 @@ const dashboardController = () => {
     }
   };
 
+  const getTaskDashboardCounts = async (req, res) => {
+    try {
+      const tasks = await Task.findAll({ where: { deleted_at: null } }); // Note: parent_id column doesn't exist in database
+      const upcomingTasks = tasks.filter(task => task.status === 'To Do' && task.due_date && new Date(task.due_date) > new Date());
+      const overdueTasks = tasks.filter(task => task.status === 'To Do' && task.due_date && new Date(task.due_date) < new Date());
+      const inProgressTasks = tasks.filter(task => task.status === 'In Progress');
+      const doneTasks = tasks.filter(task => task.status === 'Done');
+      res.json(successResponse({
+        upcomingTasks: upcomingTasks.length,
+        overdueTasks: overdueTasks.length,
+        inProgressTasks: inProgressTasks.length,
+        doneTasks: doneTasks.length
+      }));
+    } catch (error) {
+      res.status(500).json(errorResponse('Failed to fetch task dashboard counts', 500));
+    }
+  };
+
   return {
     getMonthlyStats,
     getNoticeBoard,
     updateNoticeBoard,
-    getTaskDashboardDetails
+    getTaskDashboardDetails,
+    getTaskDashboardCounts
   };
 };
 
