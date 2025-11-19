@@ -17,7 +17,7 @@ const sectionController = () => {
       }
 
       const sections = await Section.findAll({
-        where: { project_id: projectIdValue },
+        where: { project_id: projectIdValue, is_active: true },
         include: [
           { 
             model: Task, 

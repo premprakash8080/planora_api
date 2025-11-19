@@ -32,6 +32,12 @@ exports.set_routes = (app) => {
   // Insights Routes (all protected)
   const insights = require("../routes/insights");
   
+  // Task Status Routes (all protected)
+  const taskStatuses = require("../routes/taskStatuses");
+  
+  // Priority Label Routes (all protected)
+  const priorityLabels = require("../routes/priorityLabels");
+  
   // API Routes
   app.use("/api/users", users);
   app.use("/api/projects", projects);
@@ -44,4 +50,6 @@ exports.set_routes = (app) => {
   app.use("/api/members", members);
   app.use("/api/mails", mails);
   app.use("/api/insights", insights);
+  app.use("/api/task-statuses", taskStatuses);
+  app.use("/api/priority-labels", priorityLabels);
 };

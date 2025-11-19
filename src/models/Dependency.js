@@ -1,39 +1,48 @@
 const { DataTypes } = require('sequelize');
 const database = require('../config/database');
 
-const ProjectMember = database.define('ProjectMember', {
+const Dependency = database.define('Dependency', {
   id: {
     type: DataTypes.BIGINT,
     primaryKey: true,
     autoIncrement: true,
   },
-  project_id: {
+  task_id: {
     type: DataTypes.BIGINT,
     allowNull: false,
   },
-  user_id: {
+  depends_on_task_id: {
     type: DataTypes.BIGINT,
     allowNull: false,
   },
-  role: {
-    type: DataTypes.ENUM('owner', 'manager', 'member'),
-    defaultValue: 'member',
+  dependency_type: {
+    type: DataTypes.ENUM('blocks', 'blocked_by', 'related_to'),
+    defaultValue: 'blocks',
   },
   is_active: {
     type: DataTypes.BOOLEAN,
     defaultValue: true,
   },
 }, {
-  tableName: 'project_members',
+  tableName: 'dependencies',
   timestamps: true,
   underscored: true,
   indexes: [
     {
       unique: true,
-      fields: ['project_id', 'user_id'],
+      fields: ['task_id', 'depends_on_task_id', 'dependency_type'],
     },
+    {
+      fields: ['task_id']
+    },
+    {
+      fields: ['depends_on_task_id']
+    },
+    {
+      fields: ['is_active']
+    }
   ],
 });
 
-module.exports = ProjectMember;
+module.exports = Dependency;
 

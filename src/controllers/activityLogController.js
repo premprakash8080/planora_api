@@ -1,4 +1,4 @@
-const { TaskActivityLog, Task, Project, User } = require('../models');
+const { TaskActivityLog, Task, Project, User, TaskStatus, PriorityLabel } = require('../models');
 const { Op } = require('sequelize');
 const { successResponse, errorResponse, paginationMeta } = require('../utils/responseFormatter');
 
@@ -168,8 +168,22 @@ const activityLogController = () => {
           {
             model: Task,
             as: 'task',
-            attributes: ['id', 'title', 'status', 'priority'],
-            required: false
+            attributes: ['id', 'title', 'task_status_id', 'priority_label_id'],
+            required: false,
+            include: [
+              {
+                model: TaskStatus,
+                as: 'taskStatus',
+                attributes: ['id', 'name', 'color'],
+                required: false
+              },
+              {
+                model: PriorityLabel,
+                as: 'priorityLabel',
+                attributes: ['id', 'name', 'color'],
+                required: false
+              }
+            ]
           },
           {
             model: Project,

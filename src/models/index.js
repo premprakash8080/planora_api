@@ -11,8 +11,16 @@ const TaskActivityLog = require('./TaskActivityLog');
 const Mail = require('./Mail');
 const Attachment = require('./Attachment');
 const Label = require('./Label');
-const TaskLabel = require('./TaskLabel');
 const ProjectFavorite = require('./ProjectFavorite');
+const TaskStatus = require('./TaskStatus');
+const PriorityLabel = require('./PriorityLabel');
+const Workspace = require('./Workspace');
+const TaskFollower = require('./TaskFollower');
+const Dependency = require('./Dependency');
+const CustomField = require('./CustomField');
+const CustomFieldValue = require('./CustomFieldValue');
+const TaskReaction = require('./TaskReaction');
+const InboxNotification = require('./InboxNotification');
 
 // Define associations
 // User associations
@@ -20,6 +28,11 @@ User.hasMany(Team, { foreignKey: 'created_by', as: 'createdTeams' });
 User.hasMany(Project, { foreignKey: 'created_by', as: 'createdProjects' });
 User.hasMany(Task, { foreignKey: 'created_by', as: 'createdTasks' });
 User.hasMany(Task, { foreignKey: 'assigned_to', as: 'assignedTasks' });
+User.hasMany(Workspace, { foreignKey: 'created_by', as: 'createdWorkspaces' });
+User.hasMany(TaskFollower, { foreignKey: 'user_id', as: 'followedTasks' });
+User.hasMany(TaskReaction, { foreignKey: 'user_id', as: 'taskReactions' });
+User.hasMany(InboxNotification, { foreignKey: 'user_id', as: 'notifications' });
+User.hasMany(CustomField, { foreignKey: 'created_by', as: 'createdCustomFields' });
 
 // Team associations
 Team.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
@@ -34,6 +47,10 @@ Project.hasMany(Task, { foreignKey: 'project_id', as: 'tasks' });
 Project.hasMany(ProjectMember, { foreignKey: 'project_id', as: 'members' });
 Project.hasMany(ProjectFavorite, { foreignKey: 'project_id', as: 'favorites' });
 Project.hasMany(Label, { foreignKey: 'project_id', as: 'labels' });
+Project.hasMany(TaskStatus, { foreignKey: 'project_id', as: 'taskStatuses' });
+Project.hasMany(PriorityLabel, { foreignKey: 'project_id', as: 'priorityLabels' });
+Project.hasMany(CustomField, { foreignKey: 'project_id', as: 'customFields' });
+Project.hasMany(InboxNotification, { foreignKey: 'project_id', as: 'notifications' });
 
 // Section associations
 Section.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
@@ -50,7 +67,14 @@ Task.belongsTo(User, { foreignKey: 'assigned_to', as: 'assignee' });
 Task.hasMany(Subtask, { foreignKey: 'task_id', as: 'subtasks' });
 Task.hasMany(TaskComment, { foreignKey: 'task_id', as: 'comments' });
 Task.hasMany(Attachment, { foreignKey: 'task_id', as: 'attachments' });
-Task.hasMany(TaskLabel, { foreignKey: 'task_id', as: 'taskLabels' });
+Task.belongsTo(TaskStatus, { foreignKey: 'task_status_id', as: 'taskStatus' });
+Task.belongsTo(PriorityLabel, { foreignKey: 'priority_label_id', as: 'priorityLabel' });
+Task.hasMany(TaskFollower, { foreignKey: 'task_id', as: 'followers' });
+Task.hasMany(Dependency, { foreignKey: 'task_id', as: 'dependencies' });
+Task.hasMany(Dependency, { foreignKey: 'depends_on_task_id', as: 'dependents' });
+Task.hasMany(CustomFieldValue, { foreignKey: 'task_id', as: 'customFieldValues' });
+Task.hasMany(TaskReaction, { foreignKey: 'task_id', as: 'reactions' });
+Task.hasMany(InboxNotification, { foreignKey: 'task_id', as: 'notifications' });
 
 // TeamMember associations
 TeamMember.belongsTo(Team, { foreignKey: 'team_id', as: 'team' });
@@ -86,15 +110,51 @@ Attachment.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
 // Label associations
 Label.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
-Label.hasMany(TaskLabel, { foreignKey: 'label_id', as: 'taskLabels' });
-
-// TaskLabel associations
-TaskLabel.belongsTo(Task, { foreignKey: 'task_id', as: 'task' });
-TaskLabel.belongsTo(Label, { foreignKey: 'label_id', as: 'label' });
 
 // ProjectFavorite associations
 ProjectFavorite.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 ProjectFavorite.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// TaskStatus associations
+TaskStatus.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+TaskStatus.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+TaskStatus.hasMany(Task, { foreignKey: 'task_status_id', as: 'tasks' });
+User.hasMany(TaskStatus, { foreignKey: 'created_by', as: 'createdTaskStatuses' });
+
+// PriorityLabel associations
+PriorityLabel.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+PriorityLabel.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+PriorityLabel.hasMany(Task, { foreignKey: 'priority_label_id', as: 'tasks' });
+User.hasMany(PriorityLabel, { foreignKey: 'created_by', as: 'createdPriorityLabels' });
+
+// Workspace associations
+Workspace.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+
+// TaskFollower associations
+TaskFollower.belongsTo(Task, { foreignKey: 'task_id', as: 'task' });
+TaskFollower.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// Dependency associations
+Dependency.belongsTo(Task, { foreignKey: 'task_id', as: 'task' });
+Dependency.belongsTo(Task, { foreignKey: 'depends_on_task_id', as: 'dependsOnTask' });
+
+// CustomField associations
+CustomField.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+CustomField.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+CustomField.hasMany(CustomFieldValue, { foreignKey: 'custom_field_id', as: 'values' });
+
+// CustomFieldValue associations
+CustomFieldValue.belongsTo(Task, { foreignKey: 'task_id', as: 'task' });
+CustomFieldValue.belongsTo(CustomField, { foreignKey: 'custom_field_id', as: 'customField' });
+
+// TaskReaction associations
+TaskReaction.belongsTo(Task, { foreignKey: 'task_id', as: 'task' });
+TaskReaction.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// InboxNotification associations
+InboxNotification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+InboxNotification.belongsTo(Task, { foreignKey: 'task_id', as: 'task' });
+InboxNotification.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 
 module.exports = {
   User,
@@ -110,7 +170,15 @@ module.exports = {
   Mail,
   Attachment,
   Label,
-  TaskLabel,
   ProjectFavorite,
+  TaskStatus,
+  PriorityLabel,
+  Workspace,
+  TaskFollower,
+  Dependency,
+  CustomField,
+  CustomFieldValue,
+  TaskReaction,
+  InboxNotification,
 };
 

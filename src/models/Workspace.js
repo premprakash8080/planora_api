@@ -1,14 +1,14 @@
 const { DataTypes } = require('sequelize');
 const database = require('../config/database');
 
-const Team = database.define('Team', {
+const Workspace = database.define('Workspace', {
   id: {
     type: DataTypes.BIGINT,
     primaryKey: true,
     autoIncrement: true,
   },
   name: {
-    type: DataTypes.STRING(150),
+    type: DataTypes.STRING(255),
     allowNull: false,
   },
   description: {
@@ -28,12 +28,20 @@ const Team = database.define('Team', {
     allowNull: true,
   },
 }, {
-  tableName: 'teams',
+  tableName: 'workspaces',
   timestamps: true,
   underscored: true,
   paranoid: true,
   deletedAt: 'deleted_at',
+  indexes: [
+    {
+      fields: ['created_by']
+    },
+    {
+      fields: ['is_active']
+    }
+  ]
 });
 
-module.exports = Team;
+module.exports = Workspace;
 

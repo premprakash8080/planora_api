@@ -19,6 +19,10 @@ const Section = database.define('Section', {
     type: DataTypes.INTEGER,
     defaultValue: 0,
   },
+  is_active: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+  },
 }, {
   tableName: 'sections',
   timestamps: true,

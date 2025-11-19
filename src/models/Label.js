@@ -19,6 +19,10 @@ const Label = database.define('Label', {
     type: DataTypes.STRING(20),
     allowNull: true,
   },
+  is_active: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+  },
 }, {
   tableName: 'labels',
   timestamps: true,

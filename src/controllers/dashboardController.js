@@ -1,4 +1,4 @@
-const { Task, Project, NoticeBoard } = require('../models');
+const { Task, Project, NoticeBoard, TaskStatus, PriorityLabel } = require('../models');
 const { Op } = require('sequelize');
 const { successResponse, errorResponse } = require('../utils/responseFormatter');
 
@@ -26,29 +26,46 @@ const dashboardController = () => {
         }
       });
 
-      // Get tasks completed this month
-      const completed = await Task.count({
-        where: {
-          status: 'Done',
-          updated_at: {
-            [Op.between]: [startOfMonth, endOfMonth]
-          },
-          deleted_at: null
-        }
+      // Find TaskStatus IDs for "Done" status
+      const doneStatus = await TaskStatus.findOne({
+        where: { name: 'Done', is_active: true }
       });
+      const doneStatusId = doneStatus ? doneStatus.id : null;
+
+      // Find TaskStatus IDs for "In Progress" and "Done" statuses
+      const inProgressStatus = await TaskStatus.findOne({
+        where: { name: 'In Progress', is_active: true }
+      });
+      const inProgressStatusId = inProgressStatus ? inProgressStatus.id : null;
+
+      // Get tasks completed this month
+      let completed = 0;
+      if (doneStatusId) {
+        completed = await Task.count({
+          where: {
+            task_status_id: doneStatusId,
+            updated_at: {
+              [Op.between]: [startOfMonth, endOfMonth]
+            },
+            deleted_at: null
+          }
+        });
+      }
 
       // Get tasks that are "out" (in progress or completed) this month
-      const housesOut = await Task.count({
-        where: {
-          status: {
-            [Op.in]: ['In Progress', 'Done']
-          },
-          updated_at: {
-            [Op.between]: [startOfMonth, endOfMonth]
-          },
-          deleted_at: null
-        }
-      });
+      const statusIds = [inProgressStatusId, doneStatusId].filter(id => id !== null);
+      let housesOut = 0;
+      if (statusIds.length > 0) {
+        housesOut = await Task.count({
+          where: {
+            task_status_id: { [Op.in]: statusIds },
+            updated_at: {
+              [Op.between]: [startOfMonth, endOfMonth]
+            },
+            deleted_at: null
+          }
+        });
+      }
 
       res.json({
         newJobs,
@@ -102,11 +119,48 @@ const dashboardController = () => {
   // Get task dashboard details
   const getTaskDashboardDetails = async (req, res) => {
     try {
-      const tasks = await Task.findAll({ where: { deleted_at: null } });
-      const upcomingTasks = tasks.filter(task => task.status === 'To Do' && task.due_date > new Date());
-      const overdueTasks = tasks.filter(task => task.status === 'To Do' && task.due_date < new Date());
-      const inProgressTasks = tasks.filter(task => task.status === 'In Progress');
-      const doneTasks = tasks.filter(task => task.status === 'Done');
+      // Find TaskStatus records by name
+      const toDoStatus = await TaskStatus.findOne({ where: { name: 'To Do', is_active: true } });
+      const inProgressStatus = await TaskStatus.findOne({ where: { name: 'In Progress', is_active: true } });
+      const doneStatus = await TaskStatus.findOne({ where: { name: 'Done', is_active: true } });
+
+      const tasks = await Task.findAll({
+        where: { deleted_at: null },
+        include: [
+          {
+            model: TaskStatus,
+            as: 'taskStatus',
+            required: false
+          },
+          {
+            model: PriorityLabel,
+            as: 'priorityLabel',
+            required: false
+          }
+        ]
+      });
+
+      const currentDate = new Date();
+      const upcomingTasks = tasks.filter(task => {
+        const isToDo = toDoStatus && task.task_status_id === toDoStatus.id;
+        const hasDueDate = task.due_date && new Date(task.due_date) > currentDate;
+        return isToDo && hasDueDate;
+      });
+
+      const overdueTasks = tasks.filter(task => {
+        const isToDo = toDoStatus && task.task_status_id === toDoStatus.id;
+        const hasDueDate = task.due_date && new Date(task.due_date) < currentDate;
+        return isToDo && hasDueDate;
+      });
+
+      const inProgressTasks = tasks.filter(task => 
+        inProgressStatus && task.task_status_id === inProgressStatus.id
+      );
+
+      const doneTasks = tasks.filter(task => 
+        doneStatus && task.task_status_id === doneStatus.id
+      );
+
       res.json({ upcomingTasks, overdueTasks, inProgressTasks, doneTasks });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -115,11 +169,57 @@ const dashboardController = () => {
 
   const getTaskDashboardCounts = async (req, res) => {
     try {
-      const tasks = await Task.findAll({ where: { deleted_at: null } }); // Note: parent_id column doesn't exist in database
-      const upcomingTasks = tasks.filter(task => task.status === 'To Do' && task.due_date && new Date(task.due_date) > new Date());
-      const overdueTasks = tasks.filter(task => task.status === 'To Do' && task.due_date && new Date(task.due_date) < new Date());
-      const inProgressTasks = tasks.filter(task => task.status === 'In Progress');
-      const doneTasks = tasks.filter(task => task.status === 'Done');
+      // Find TaskStatus records by name
+      const toDoStatus = await TaskStatus.findOne({ where: { name: 'To Do', is_active: true } });
+      const inProgressStatus = await TaskStatus.findOne({ where: { name: 'In Progress', is_active: true } });
+      const doneStatus = await TaskStatus.findOne({ where: { name: 'Done', is_active: true } });
+
+      const toDoStatusId = toDoStatus ? toDoStatus.id : null;
+      const inProgressStatusId = inProgressStatus ? inProgressStatus.id : null;
+      const doneStatusId = doneStatus ? doneStatus.id : null;
+
+      const currentDate = new Date();
+
+      // Get all tasks with their status and priority information
+      const tasks = await Task.findAll({
+        where: { deleted_at: null },
+        include: [
+          {
+            model: TaskStatus,
+            as: 'taskStatus',
+            attributes: ['id', 'name', 'color'],
+            required: false
+          },
+          {
+            model: PriorityLabel,
+            as: 'priorityLabel',
+            attributes: ['id', 'name', 'color'],
+            required: false
+          }
+        ]
+      });
+
+      // Filter tasks by status
+      const upcomingTasks = tasks.filter(task => {
+        const isToDo = toDoStatusId && task.task_status_id === toDoStatusId;
+        const hasDueDate = task.due_date && new Date(task.due_date) > currentDate;
+        return isToDo && hasDueDate;
+      });
+
+      const overdueTasks = tasks.filter(task => {
+        const isToDo = toDoStatusId && task.task_status_id === toDoStatusId;
+        const hasDueDate = task.due_date && new Date(task.due_date) < currentDate;
+        return isToDo && hasDueDate;
+      });
+
+      const inProgressTasks = tasks.filter(task => 
+        inProgressStatusId && task.task_status_id === inProgressStatusId
+      );
+
+      const doneTasks = tasks.filter(task => 
+        doneStatusId && task.task_status_id === doneStatusId
+      );
+
       res.json(successResponse({
         upcomingTasks: upcomingTasks.length,
         overdueTasks: overdueTasks.length,
@@ -127,7 +227,8 @@ const dashboardController = () => {
         doneTasks: doneTasks.length
       }));
     } catch (error) {
-      res.status(500).json(errorResponse('Failed to fetch task dashboard counts', 500));
+      console.error('Error fetching task dashboard counts:', error);
+      res.status(500).json(errorResponse(`Failed to fetch task dashboard counts: ${error.message}`, 500));
     }
   };
 

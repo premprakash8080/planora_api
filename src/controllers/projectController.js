@@ -1,4 +1,4 @@
-const { Project, Section, Task, User, ProjectMember, ProjectFavorite } = require('../models');
+const { Project, Section, Task, User, ProjectMember, ProjectFavorite, TaskStatus, PriorityLabel } = require('../models');
 const { Op } = require('sequelize');
 const { successResponse, errorResponse } = require('../utils/responseFormatter');
 
@@ -55,7 +55,21 @@ const projectController = () => {
       const project = await Project.findByPk(projectId, {
         include: [
           { model: User, as: 'creator', attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'] },
-          { model: Section, as: 'sections', include: [{ model: Task, as: 'tasks' }] },
+          { 
+            model: Section, 
+            as: 'sections', 
+            include: [
+              { 
+                model: Task, 
+                as: 'tasks',
+                include: [
+                  { model: User, as: 'assignee', attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'], required: false },
+                  { model: TaskStatus, as: 'taskStatus', required: false },
+                  { model: PriorityLabel, as: 'priorityLabel', required: false },
+                ]
+              }
+            ] 
+          },
           {
             model: ProjectMember,
             as: 'members',

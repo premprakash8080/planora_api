@@ -1,5 +1,7 @@
 const { DataTypes } = require('sequelize');
 const database = require('../config/database');
+const taskActivityLogger = require('../utils/taskActivityLogger');
+const { findChangedSet, determineActivityType, generateActivityDescription } = require('../utils/taskHelpers');
 
 const Task = database.define('Task', {
   id: {
@@ -31,13 +33,13 @@ const Task = database.define('Task', {
     type: DataTypes.BIGINT,
     allowNull: true,
   },
-  priority: {
-    type: DataTypes.ENUM('Low', 'Medium', 'High'),
-    defaultValue: 'Medium',
+  priority_label_id: {
+    type: DataTypes.BIGINT,
+    allowNull: true, // Will be set to a default PriorityLabel if null
   },
-  status: {
-    type: DataTypes.ENUM('To Do', 'In Progress', 'Done', 'On Track', 'At Risk', 'Off Track'),
-    defaultValue: 'To Do',
+  task_status_id: {
+    type: DataTypes.BIGINT,
+    allowNull: true, // Will be set to a default TaskStatus if null
   },
   completed: {
     type: DataTypes.BOOLEAN,
@@ -72,5 +74,83 @@ const Task = database.define('Task', {
   deletedAt: 'deleted_at',
 });
 
+// Hook: beforeCreate - Log task creation
+Task.beforeCreate(async (task, options) => {
+  // Store the userId in instance for afterCreate hook
+  // We'll use created_by field which is already set
+  task._activityUserId = options?.userId || task.created_by;
+});
+
+// Hook: afterCreate - Create activity log for task creation
+Task.afterCreate(async (task, options) => {
+  try {
+    const userId = options?.userId || task.created_by || task._activityUserId;
+    if (userId && task.id && task.project_id) {
+      await taskActivityLogger.logTaskCreated(task, userId);
+    }
+  } catch (error) {
+    // Log error but don't throw - activity logging shouldn't break the main operation
+    console.error('Failed to log task creation activity:', error);
+  }
+});
+
+// Hook: beforeUpdate - Store old values and userId for activity logging
+Task.beforeUpdate(async (task, options) => {
+  // Store old values for comparison using Sequelize's previous() method
+  const changedFields = task.changed() || [];
+  task._oldValues = {};
+  changedFields.forEach(field => {
+    task._oldValues[field] = task.previous(field);
+  });
+  // Store userId from options if provided
+  task._activityUserId = options?.userId;
+});
+
+// Hook: afterUpdate - Create activity log for task updates
+Task.afterUpdate(async (task, options) => {
+  try {
+    const userId = options?.userId || task._activityUserId;
+    if (!userId) {
+      // If no userId provided, skip logging (might be a system update)
+      return;
+    }
+
+    if (!task.id || !task.project_id) {
+      return;
+    }
+
+    // Get old values that were stored in beforeUpdate
+    const oldValues = task._oldValues || {};
+    const newValues = task.dataValues || {};
+
+    // Track changes for key fields
+    const fieldsToTrack = ['title', 'task_status_id', 'priority_label_id', 'assigned_to', 'due_date', 'description', 'completed'];
+    
+    // Use helper function to find changed set
+    const { changes, oldValue, newValue } = findChangedSet(oldValues, newValues, fieldsToTrack);
+
+    // Only log if there are actual changes
+    if (changes.length > 0) {
+      // Determine activity type and description using helper functions
+      const activityType = determineActivityType(changes);
+      const description = generateActivityDescription(changes);
+      
+      await taskActivityLogger.logActivity({
+        taskId: task.id,
+        projectId: task.project_id,
+        activityType,
+        description,
+        updatedBy: userId,
+        oldValue,
+        newValue
+      });
+    }
+  } catch (error) {
+    // Log error but don't throw - activity logging shouldn't break the main operation
+    console.error('Failed to log task update activity:', error);
+  }
+});
+
 module.exports = Task;
+
 

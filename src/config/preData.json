@@ -94,8 +94,8 @@
     {
       "title": "Set up development environment",
       "description": "Configure local development environment with all necessary tools",
-      "priority": "High",
-      "status": "To Do",
+      "priority_label_index": 4,
+      "task_status_index": 0,
       "completed": false,
       "position": 0,
       "section_index": 0,
@@ -104,8 +104,8 @@
     {
       "title": "Design database schema",
       "description": "Create comprehensive database schema for task management",
-      "priority": "High",
-      "status": "To Do",
+      "priority_label_index": 4,
+      "task_status_index": 0,
       "completed": false,
       "position": 1,
       "section_index": 0,
@@ -114,8 +114,8 @@
     {
       "title": "Implement authentication system",
       "description": "Build JWT-based authentication with user registration and login",
-      "priority": "Medium",
-      "status": "In Progress",
+      "priority_label_index": 3,
+      "task_status_index": 1,
       "completed": false,
       "position": 0,
       "section_index": 1,
@@ -124,8 +124,8 @@
     {
       "title": "Create API documentation",
       "description": "Document all API endpoints with examples",
-      "priority": "Low",
-      "status": "Done",
+      "priority_label_index": 2,
+      "task_status_index": 2,
       "completed": true,
       "position": 0,
       "section_index": 2,
@@ -134,8 +134,8 @@
     {
       "title": "Design user interface",
       "description": "Create mockups and wireframes for the application",
-      "priority": "High",
-      "status": "In Progress",
+      "priority_label_index": 4,
+      "task_status_index": 1,
       "completed": false,
       "position": 1,
       "section_index": 1,
@@ -353,6 +353,109 @@
       "old_value": {"status": "To Do"},
       "new_value": {"status": "In Progress"},
       "updated_by_index": 2
+    }
+  ],
+  "priority_labels": [
+    {
+      "project_index": 0,
+      "name": "Critical",
+      "color": "#ef4444",
+      "icon": "priority_high",
+      "order": 0,
+      "is_default": false,
+      "created_by_index": 0
+    },
+    {
+      "project_index": 0,
+      "name": "Urgent",
+      "color": "#f59e0b",
+      "icon": "warning",
+      "order": 1,
+      "is_default": false,
+      "created_by_index": 0
+    },
+    {
+      "project_index": null,
+      "name": "Low",
+      "color": "#10b981",
+      "icon": "arrow_downward",
+      "order": 3,
+      "is_default": true,
+      "created_by_index": 0
+    },
+    {
+      "project_index": null,
+      "name": "Medium",
+      "color": "#3b82f6",
+      "icon": "remove",
+      "order": 2,
+      "is_default": true,
+      "created_by_index": 0
+    },
+    {
+      "project_index": null,
+      "name": "High",
+      "color": "#ef4444",
+      "icon": "arrow_upward",
+      "order": 1,
+      "is_default": true,
+      "created_by_index": 0
+    }
+  ],
+  "task_statuses": [
+    {
+      "project_index": null,
+      "name": "To Do",
+      "color": "#6b7280",
+      "icon": "circle",
+      "order": 0,
+      "is_default": true,
+      "created_by_index": 0
+    },
+    {
+      "project_index": null,
+      "name": "In Progress",
+      "color": "#3b82f6",
+      "icon": "play_circle",
+      "order": 1,
+      "is_default": false,
+      "created_by_index": 0
+    },
+    {
+      "project_index": null,
+      "name": "Done",
+      "color": "#10b981",
+      "icon": "check_circle",
+      "order": 2,
+      "is_default": false,
+      "created_by_index": 0
+    },
+    {
+      "project_index": null,
+      "name": "On Track",
+      "color": "#10b981",
+      "icon": "trending_up",
+      "order": 3,
+      "is_default": false,
+      "created_by_index": 0
+    },
+    {
+      "project_index": null,
+      "name": "At Risk",
+      "color": "#f59e0b",
+      "icon": "warning",
+      "order": 4,
+      "is_default": false,
+      "created_by_index": 0
+    },
+    {
+      "project_index": null,
+      "name": "Off Track",
+      "color": "#ef4444",
+      "icon": "error",
+      "order": 5,
+      "is_default": false,
+      "created_by_index": 0
     }
   ]
 }

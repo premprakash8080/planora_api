@@ -1,4 +1,4 @@
-const { Task, Section, Project, User, TaskComment, Subtask } = require('../models');
+const { Task, Section, Project, User, TaskComment, Subtask, TaskStatus, PriorityLabel } = require('../models');
 const { Op } = require('sequelize');
 const taskActivityLogger = require('../utils/taskActivityLogger');
 const { successResponse, errorResponse } = require('../utils/responseFormatter');
@@ -21,6 +21,8 @@ const taskController = () => {
           { model: Section, as: 'section' },
           { model: User, as: 'assignee', attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'], required: false },
           { model: User, as: 'creator', attributes: ['id', 'full_name', 'email'] },
+          { model: TaskStatus, as: 'taskStatus', required: false },
+          { model: PriorityLabel, as: 'priorityLabel', required: false },
           // Note: childTasks removed - parent_id column doesn't exist in database
         ],
         order: [['position', 'ASC']],
@@ -48,6 +50,8 @@ const taskController = () => {
           { model: User, as: 'assignee', attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'], required: false },
           { model: User, as: 'creator', attributes: ['id', 'full_name', 'email'] },
           { model: Project, as: 'project' },
+          { model: TaskStatus, as: 'taskStatus', required: false },
+          { model: PriorityLabel, as: 'priorityLabel', required: false },
           { 
             model: Subtask, 
             as: 'subtasks', 
@@ -71,7 +75,7 @@ const taskController = () => {
 
   // Create new task
   const createTask = async (req, res) => {
-    const { project_id, section_id, title, description, assigned_to, priority, status, due_date, position } = req.body;
+    const { project_id, section_id, title, description, assigned_to, priority_label_id, task_status_id, due_date, position } = req.body;
     const created_by = req.user.id;
 
     try {
@@ -87,12 +91,18 @@ const taskController = () => {
         return res.status(400).json(errorResponse('Task title must be 255 characters or less', 400));
       }
 
-      if (priority && !['Low', 'Medium', 'High'].includes(priority)) {
-        return res.status(400).json(errorResponse('Priority must be Low, Medium, or High', 400));
+      // Validate priority_label_id if provided
+      if (priority_label_id !== undefined && priority_label_id !== null) {
+        if (isNaN(parseInt(priority_label_id))) {
+          return res.status(400).json(errorResponse('Invalid priority_label_id', 400));
+        }
       }
 
-      if (status && !['To Do', 'In Progress', 'Done', 'On Track', 'At Risk', 'Off Track'].includes(status)) {
-        return res.status(400).json(errorResponse('Invalid task status', 400));
+      // Validate task_status_id if provided
+      if (task_status_id !== undefined && task_status_id !== null) {
+        if (isNaN(parseInt(task_status_id))) {
+          return res.status(400).json(errorResponse('Invalid task_status_id', 400));
+        }
       }
 
       const task = await Task.create({
@@ -102,25 +112,31 @@ const taskController = () => {
         description,
         created_by,
         assigned_to: assigned_to || null,
-        priority: priority || 'Medium',
-        status: status || 'To Do',
+        priority_label_id: priority_label_id ? parseInt(priority_label_id) : null,
+        task_status_id: task_status_id ? parseInt(task_status_id) : null,
         due_date: due_date || null,
         position: position || 0,
         completed: false,
         // Note: parent_id removed - column doesn't exist in database
+      }, {
+        userId: created_by // Pass userId through options for activity log hook
       });
 
       const taskWithRelations = await Task.findByPk(task.id, {
         include: [
           { model: Section, as: 'section' },
           { model: User, as: 'assignee', attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'], required: false },
+          { model: TaskStatus, as: 'taskStatus', required: false },
+          { model: PriorityLabel, as: 'priorityLabel', required: false },
           { model: TaskComment, as: 'comments', include: [{ model: User, as: 'user', attributes: ['id', 'full_name', 'email', 'avatar_url'] }], required: false },
           // Note: childTasks removed - parent_id column doesn't exist in database
         ],
       });
 
-      // Log task creation activity
-      await taskActivityLogger.logTaskCreated(taskWithRelations, created_by);
+      // Activity log is now handled by the model hook (afterCreate)
+      // Keeping this for backward compatibility, but it will be a duplicate log
+      // Commented out to avoid duplicate logs:
+      // await taskActivityLogger.logTaskCreated(taskWithRelations, created_by);
 
       res.status(201).json(successResponse({ task: taskWithRelations }, 'Task created successfully'));
     } catch (error) {
@@ -139,7 +155,22 @@ const taskController = () => {
       }
 
       // Extract update data, excluding task_id from body
-      const { task_id, ...updateData } = req.body;
+      // Only include fields that are explicitly provided (not undefined)
+      const { task_id, ...allBodyData } = req.body;
+      const updateData = {};
+      
+      // Only copy fields that are explicitly provided (not undefined)
+      // This ensures we don't accidentally update fields that weren't meant to be changed
+      const allowedFields = [
+        'title', 'description', 'assigned_to', 'due_date', 'completed',
+        'priority_label_id', 'task_status_id', 'section_id', 'position'
+      ];
+      
+      allowedFields.forEach(field => {
+        if (allBodyData[field] !== undefined) {
+          updateData[field] = allBodyData[field];
+        }
+      });
 
       if (updateData.title !== undefined && (!updateData.title || updateData.title.trim().length === 0)) {
         return res.status(400).json(errorResponse('Task title cannot be empty', 400));
@@ -149,12 +180,30 @@ const taskController = () => {
         return res.status(400).json(errorResponse('Task title must be 255 characters or less', 400));
       }
 
-      if (updateData.priority && !['Low', 'Medium', 'High'].includes(updateData.priority)) {
-        return res.status(400).json(errorResponse('Priority must be Low, Medium, or High', 400));
+      // Validate priority_label_id if provided (allow null to unset)
+      if (updateData.priority_label_id !== undefined) {
+        if (updateData.priority_label_id === null || updateData.priority_label_id === '') {
+          updateData.priority_label_id = null;
+        } else {
+          const parsed = parseInt(updateData.priority_label_id);
+          if (isNaN(parsed)) {
+            return res.status(400).json(errorResponse('Invalid priority_label_id', 400));
+          }
+          updateData.priority_label_id = parsed;
+        }
       }
 
-      if (updateData.status && !['To Do', 'In Progress', 'Done', 'On Track', 'At Risk', 'Off Track'].includes(updateData.status)) {
-        return res.status(400).json(errorResponse('Invalid task status', 400));
+      // Validate task_status_id if provided (allow null to unset)
+      if (updateData.task_status_id !== undefined) {
+        if (updateData.task_status_id === null || updateData.task_status_id === '') {
+          updateData.task_status_id = null;
+        } else {
+          const parsed = parseInt(updateData.task_status_id);
+          if (isNaN(parsed)) {
+            return res.status(400).json(errorResponse('Invalid task_status_id', 400));
+          }
+          updateData.task_status_id = parsed;
+        }
       }
 
       const task = await Task.findByPk(taskId);
@@ -162,22 +211,28 @@ const taskController = () => {
         return res.status(404).json(errorResponse('Task not found', 404));
       }
 
-      // Store old values for activity logging
+      // Store old values for activity logging (for backward compatibility)
       const oldTask = { ...task.toJSON() };
 
-      await task.update(updateData);
+      await task.update(updateData, {
+        userId: req.user.id // Pass userId through options for activity log hook
+      });
 
       const updatedTask = await Task.findByPk(taskId, {
         include: [
           { model: Section, as: 'section' },
           { model: User, as: 'assignee', attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'], required: false },
+          { model: TaskStatus, as: 'taskStatus', required: false },
+          { model: PriorityLabel, as: 'priorityLabel', required: false },
           { model: TaskComment, as: 'comments', include: [{ model: User, as: 'user', attributes: ['id', 'full_name', 'email', 'avatar_url'] }], required: false },
           // Note: childTasks removed - parent_id column doesn't exist in database
         ],
       });
 
-      // Log task update activity
-      await taskActivityLogger.logTaskUpdated(oldTask, updateData, req.user.id);
+      // Activity log is now handled by the model hook (afterUpdate)
+      // Keeping this for backward compatibility, but it will be a duplicate log
+      // Commented out to avoid duplicate logs:
+      // await taskActivityLogger.logTaskUpdated(oldTask, updateData, req.user.id);
 
       res.json(successResponse({ task: updatedTask }, 'Task updated successfully'));
     } catch (error) {
@@ -224,12 +279,16 @@ const taskController = () => {
       }
 
       const wasCompleted = task.completed;
-      await task.update({ completed: !task.completed });
+      await task.update({ completed: !task.completed }, {
+        userId: req.user.id // Pass userId through options for activity log hook
+      });
 
-      // Log completion activity
-      if (!wasCompleted) {
-        await taskActivityLogger.logTaskCompleted(task, req.user.id);
-      }
+      // Activity log is now handled by the model hook (afterUpdate)
+      // The hook will detect the 'completed' change and log it appropriately
+      // Keeping this for backward compatibility, but it will be a duplicate log:
+      // if (!wasCompleted) {
+      //   await taskActivityLogger.logTaskCompleted(task, req.user.id);
+      // }
 
       res.json(successResponse({ task }, 'Task completion toggled'));
     } catch (error) {
@@ -253,7 +312,11 @@ const taskController = () => {
         updates.map(async ({ id, ...updateData }) => {
           const task = await Task.findByPk(id);
           if (task) {
-            await task.update(updateData);
+            // For batch updates, pass userId if available (for activity logging)
+            // If no userId, hooks will skip activity logging
+            await task.update(updateData, {
+              userId: req.user?.id // Pass userId through options for activity log hook
+            });
             return { id, success: true };
           }
           return { id, success: false, error: 'Task not found' };

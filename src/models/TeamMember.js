@@ -19,6 +19,10 @@ const TeamMember = database.define('TeamMember', {
     type: DataTypes.ENUM('owner', 'admin', 'member'),
     defaultValue: 'member',
   },
+  is_active: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+  },
 }, {
   tableName: 'team_members',
   timestamps: true,

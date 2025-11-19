@@ -1,9 +1,16 @@
-const { TaskActivityLog } = require('../models');
-
 /**
  * Utility to log task activities automatically
+ * Uses lazy require to avoid circular dependency issues
  */
 const taskActivityLogger = {
+  /**
+   * Get TaskActivityLog model (lazy load to avoid circular dependencies)
+   */
+  getTaskActivityLog() {
+    const { TaskActivityLog } = require('../models');
+    return TaskActivityLog;
+  },
+
   /**
    * Log task activity
    * @param {Object} params - Activity parameters
@@ -17,6 +24,12 @@ const taskActivityLogger = {
    */
   async logActivity({ taskId, projectId, activityType, description, updatedBy, oldValue = null, newValue = null }) {
     try {
+      const TaskActivityLog = this.getTaskActivityLog();
+      if (!TaskActivityLog) {
+        console.error('TaskActivityLog model is not available');
+        return;
+      }
+      
       await TaskActivityLog.create({
         task_id: taskId,
         project_id: projectId,

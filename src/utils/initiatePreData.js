@@ -3,8 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const { 
   User, Project, Section, Task, Team, TeamMember, Mail, 
-  ProjectMember, Subtask, TaskComment, Label, TaskLabel, 
-  ProjectFavorite, TaskActivityLog 
+  ProjectMember, Subtask, TaskComment, Label, 
+  ProjectFavorite, TaskActivityLog, TaskStatus, PriorityLabel
 } = require('../models');
 const database = require('../config/database');
 const tableNames = require('../config/table_names');
@@ -188,6 +188,50 @@ const initiatePreData = async () => {
         global.sections = sections;
       }
 
+      // Create task statuses (before tasks, so tasks can reference them)
+      if (preData.task_statuses && preData.task_statuses.length > 0 && global.projects && global.users) {
+        const taskStatuses = await TaskStatus.bulkCreate(
+          preData.task_statuses.map(statusData => ({
+            project_id: statusData.project_index !== null && statusData.project_index !== undefined 
+              ? global.projects[statusData.project_index]?.id 
+              : null,
+            name: statusData.name,
+            color: statusData.color || null,
+            icon: statusData.icon || null,
+            description: statusData.description || null,
+            order: statusData.order || 0,
+            is_default: statusData.is_default || false,
+            is_active: true,
+            created_by: global.users[statusData.created_by_index]?.id || global.adminUser.id,
+          }))
+        );
+
+        console.log(`✅ ${taskStatuses.length} task statuses created`);
+        global.taskStatuses = taskStatuses;
+      }
+
+      // Create priority labels (before tasks, so tasks can reference them)
+      if (preData.priority_labels && preData.priority_labels.length > 0 && global.projects && global.users) {
+        const priorityLabels = await PriorityLabel.bulkCreate(
+          preData.priority_labels.map(labelData => ({
+            project_id: labelData.project_index !== null && labelData.project_index !== undefined 
+              ? global.projects[labelData.project_index]?.id 
+              : null,
+            name: labelData.name,
+            color: labelData.color || null,
+            icon: labelData.icon || null,
+            description: labelData.description || null,
+            order: labelData.order || 0,
+            is_default: labelData.is_default || false,
+            is_active: true,
+            created_by: global.users[labelData.created_by_index]?.id || global.adminUser.id,
+          }))
+        );
+
+        console.log(`✅ ${priorityLabels.length} priority labels created`);
+        global.priorityLabels = priorityLabels;
+      }
+
       // Create tasks
       if (preData.tasks && preData.tasks.length > 0 && global.sampleProject && global.sections && global.users) {
         const tasks = await Task.bulkCreate(
@@ -198,8 +242,12 @@ const initiatePreData = async () => {
             description: taskData.description || null,
             created_by: global.adminUser.id,
             assigned_to: global.users[taskData.assigned_to_index]?.id || global.adminUser.id,
-            priority: taskData.priority || 'Medium',
-            status: taskData.status || 'To Do',
+            priority_label_id: taskData.priority_label_index !== undefined && taskData.priority_label_index !== null
+              ? global.priorityLabels[taskData.priority_label_index]?.id || null
+              : null,
+            task_status_id: taskData.task_status_index !== undefined && taskData.task_status_index !== null
+              ? global.taskStatuses[taskData.task_status_index]?.id || null
+              : null,
             completed: taskData.completed || false,
             position: taskData.position || 0,
           }))
@@ -262,18 +310,6 @@ const initiatePreData = async () => {
         global.labels = labels;
       }
 
-      // Create task labels
-      if (preData.task_labels && preData.task_labels.length > 0 && global.tasks && global.labels) {
-        const taskLabels = await TaskLabel.bulkCreate(
-          preData.task_labels.map(taskLabelData => ({
-            task_id: global.tasks[taskLabelData.task_index]?.id,
-            label_id: global.labels[taskLabelData.label_index]?.id,
-          }))
-        );
-
-        console.log(`✅ ${taskLabels.length} task labels created`);
-      }
-
       // Create project favorites
       if (preData.project_favorites && preData.project_favorites.length > 0 && global.projects && global.users) {
         const favorites = await ProjectFavorite.bulkCreate(
@@ -320,6 +356,7 @@ const initiatePreData = async () => {
         console.log(`✅ ${activityLogs.length} activity logs created`);
       }
 
+
       // Clean up global variables
       delete global.adminUser;
       delete global.users;
@@ -329,6 +366,8 @@ const initiatePreData = async () => {
       delete global.sections;
       delete global.tasks;
       delete global.labels;
+      delete global.taskStatuses;
+      delete global.priorityLabels;
 
       console.log('\n📋 Pre-data initialization complete!');
       
