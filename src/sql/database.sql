@@ -190,6 +190,32 @@ CREATE INDEX idx_task_comments_task_id ON task_comments(task_id);
 CREATE INDEX idx_task_comments_user_id ON task_comments(user_id);
 
 -- ==========================================================
+-- TASK ACTIVITY LOGS
+-- ==========================================================
+CREATE TABLE task_activity_logs (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    task_id BIGINT NOT NULL,
+    project_id BIGINT NOT NULL,
+    activity_type VARCHAR(100) NOT NULL,
+    description TEXT NOT NULL,
+    old_value JSON NULL,
+    new_value JSON NULL,
+    updated_by BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Indexes
+CREATE INDEX idx_task_activity_logs_task_id ON task_activity_logs(task_id);
+CREATE INDEX idx_task_activity_logs_project_id ON task_activity_logs(project_id);
+CREATE INDEX idx_task_activity_logs_updated_by ON task_activity_logs(updated_by);
+CREATE INDEX idx_task_activity_logs_activity_type ON task_activity_logs(activity_type);
+CREATE INDEX idx_task_activity_logs_created_at ON task_activity_logs(created_at);
+
+-- ==========================================================
 -- ATTACHMENTS
 -- ==========================================================
 CREATE TABLE attachments (
@@ -277,6 +303,31 @@ CREATE TABLE project_favorites (
 -- Indexes
 CREATE INDEX idx_project_favorites_project_id ON project_favorites(project_id);
 CREATE INDEX idx_project_favorites_user_id ON project_favorites(user_id);
+
+-- ==========================================================
+-- MAILS
+-- ==========================================================
+CREATE TABLE mails (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    sender_id BIGINT NOT NULL,
+    recipient_id BIGINT NOT NULL,
+    subject VARCHAR(255) NOT NULL,
+    body TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    is_starred BOOLEAN DEFAULT FALSE,
+    is_archived BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Indexes
+CREATE INDEX idx_mails_sender_id ON mails(sender_id);
+CREATE INDEX idx_mails_recipient_id ON mails(recipient_id);
+CREATE INDEX idx_mails_is_read ON mails(is_read);
+CREATE INDEX idx_mails_created_at ON mails(created_at);
 
 -- ==========================================================
 -- TRIGGERS: Update comments_count when comments are added/removed

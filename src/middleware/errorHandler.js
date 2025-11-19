@@ -1,85 +1,58 @@
-// Error handling middleware
-const errorHandler = (err, req, res, next) => {
-  let error = { ...err };
-  error.message = err.message;
+/**
+ * Centralized Error Handling Middleware
+ * Provides consistent error responses across the application
+ */
 
-  // Log error for debugging
+const { errorResponse } = require('../utils/responseFormatter');
+
+// 404 Not Found handler
+const notFound = (req, res, next) => {
+  res.status(404).json(errorResponse(`Route ${req.method} ${req.originalUrl} not found`, 404));
+};
+
+// Error handler middleware
+const errorHandler = (err, req, res, next) => {
   console.error('Error:', err);
 
-  // Sequelize validation error
+  // Sequelize validation errors
   if (err.name === 'SequelizeValidationError') {
-    const message = err.errors.map(e => e.message).join(', ');
-    error = {
-      success: false,
-      message: 'Validation Error',
-      errors: err.errors.map(e => ({
-        field: e.path,
-        message: e.message,
-      })),
-    };
-    return res.status(400).json(error);
+    const errors = err.errors.map(e => ({
+      field: e.path,
+      message: e.message
+    }));
+    return res.status(400).json(errorResponse('Validation error', 400, errors));
   }
 
-  // Sequelize unique constraint error
+  // Sequelize unique constraint errors
   if (err.name === 'SequelizeUniqueConstraintError') {
-    const message = 'Duplicate entry. This record already exists.';
-    error = {
-      success: false,
-      message,
-      field: err.errors[0]?.path,
-    };
-    return res.status(409).json(error);
+    return res.status(409).json(errorResponse('Resource already exists', 409));
   }
 
-  // Sequelize foreign key constraint error
+  // Sequelize foreign key constraint errors
   if (err.name === 'SequelizeForeignKeyConstraintError') {
-    error = {
-      success: false,
-      message: 'Invalid reference. Related record does not exist.',
-    };
-    return res.status(400).json(error);
-  }
-
-  // Sequelize database error
-  if (err.name === 'SequelizeDatabaseError') {
-    error = {
-      success: false,
-      message: 'Database error occurred',
-    };
-    return res.status(500).json(error);
+    return res.status(400).json(errorResponse('Invalid reference to related resource', 400));
   }
 
   // JWT errors
-  if (err.name === 'JsonWebTokenError') {
-    error = {
-      success: false,
-      message: 'Invalid token',
-    };
-    return res.status(401).json(error);
+  if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+    return res.status(401).json(errorResponse('Invalid or expired token', 401));
   }
 
-  if (err.name === 'TokenExpiredError') {
-    error = {
-      success: false,
-      message: 'Token expired',
-    };
-    return res.status(401).json(error);
+  // Custom application errors
+  if (err.statusCode) {
+    return res.status(err.statusCode).json(errorResponse(err.message, err.statusCode, err.errors));
   }
 
-  // Default error
-  res.status(error.statusCode || 500).json({
-    success: false,
-    message: error.message || 'Server Error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
-  });
+  // Default server error
+  res.status(500).json(errorResponse(
+    process.env.NODE_ENV === 'production' 
+      ? 'Internal server error' 
+      : err.message,
+    500
+  ));
 };
 
-// 404 handler
-const notFound = (req, res, next) => {
-  const error = new Error(`Not Found - ${req.originalUrl}`);
-  res.status(404);
-  next(error);
+module.exports = {
+  notFound,
+  errorHandler
 };
-
-module.exports = { errorHandler, notFound };
-

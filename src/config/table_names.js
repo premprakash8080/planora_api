@@ -12,7 +12,8 @@ const tableNames = {
   TABLE_NAME_LABELS: "labels",
   TABLE_NAME_TASK_LABELS: "task_labels",
   TABLE_NAME_PROJECT_FAVORITES: "project_favorites",
-  TABLE_NAME_ACTIVITY_LOGS: "activity_logs",
+  TABLE_NAME_TASK_ACTIVITY_LOGS: "task_activity_logs",
+  TABLE_NAME_MAILS: "mails",
 };
 
 module.exports = tableNames;

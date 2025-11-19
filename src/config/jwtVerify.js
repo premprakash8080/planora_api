@@ -1,6 +1,6 @@
 const jwt = require("jsonwebtoken");
-const UserModel = require('../models/user');
-const { JWT_PRIVATE_KEY } = process.env
+const UserModel = require('../models/User');
+const { JWT_PRIVATE_KEY } = process.env;
 
 module.exports = async (req, res, next) => {
   try {

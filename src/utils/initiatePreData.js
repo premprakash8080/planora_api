@@ -1,8 +1,45 @@
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
-const { User, Project, Section, Task, Team, TeamMember } = require('../models');
+const { 
+  User, Project, Section, Task, Team, TeamMember, Mail, 
+  ProjectMember, Subtask, TaskComment, Label, TaskLabel, 
+  ProjectFavorite, TaskActivityLog 
+} = require('../models');
+const database = require('../config/database');
 const tableNames = require('../config/table_names');
+
+/**
+ * Check if a table exists in the database
+ */
+const tableExists = async (tableName) => {
+  try {
+    const [results] = await database.query(
+      `SELECT COUNT(*) as count FROM information_schema.tables 
+       WHERE table_schema = DATABASE() AND table_name = ?`,
+      { replacements: [tableName] }
+    );
+    return results && results.length > 0 && results[0].count > 0;
+  } catch (error) {
+    return false;
+  }
+};
+
+/**
+ * Wait for tables to be created (with retry logic)
+ */
+const waitForTables = async (maxRetries = 10, delay = 1000) => {
+  for (let i = 0; i < maxRetries; i++) {
+    const exists = await tableExists('users');
+    if (exists) {
+      return true;
+    }
+    if (i < maxRetries - 1) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  return false;
+};
 
 /**
  * Initialize pre-populated data if tables are empty
@@ -11,6 +48,13 @@ const tableNames = require('../config/table_names');
 const initiatePreData = async () => {
   try {
     console.log('Initializing pre-data...');
+
+    // Wait for tables to be created
+    const tablesReady = await waitForTables(10, 1000);
+    if (!tablesReady) {
+      console.log('⚠️  Database tables not found after waiting. Please ensure database is properly set up.');
+      return;
+    }
 
     // Load pre-data configuration
     const preDataPath = path.join(__dirname, '../config/preData.json');
@@ -24,8 +68,14 @@ const initiatePreData = async () => {
       return;
     }
 
-    // Check if users exist using table name
-    const userCount = await User.count();
+    // Check if users exist - wrap in try-catch for safety
+    let userCount = 0;
+    try {
+      userCount = await User.count();
+    } catch (error) {
+      console.warn('⚠️  Error checking user count. Tables may not be ready yet.');
+      return;
+    }
     
     if (userCount === 0) {
       console.log('No users found. Creating pre-data from configuration...');
@@ -58,6 +108,12 @@ const initiatePreData = async () => {
           });
 
           console.log(`✅ User created: ${user.email} (Password: ${userData.password})`);
+          
+          // Store users array
+          if (!global.users) {
+            global.users = [];
+          }
+          global.users.push(user);
           
           // Store first user as admin for creating related data
           if (!global.adminUser) {
@@ -105,6 +161,12 @@ const initiatePreData = async () => {
 
           console.log(`✅ Project created: ${project.name}`);
           
+          // Store projects array
+          if (!global.projects) {
+            global.projects = [];
+          }
+          global.projects.push(project);
+          
           // Store first project for sections and tasks
           if (!global.sampleProject) {
             global.sampleProject = project;
@@ -127,7 +189,7 @@ const initiatePreData = async () => {
       }
 
       // Create tasks
-      if (preData.tasks && preData.tasks.length > 0 && global.sampleProject && global.sections) {
+      if (preData.tasks && preData.tasks.length > 0 && global.sampleProject && global.sections && global.users) {
         const tasks = await Task.bulkCreate(
           preData.tasks.map(taskData => ({
             project_id: global.sampleProject.id,
@@ -135,7 +197,7 @@ const initiatePreData = async () => {
             title: taskData.title,
             description: taskData.description || null,
             created_by: global.adminUser.id,
-            assigned_to: global.adminUser.id,
+            assigned_to: global.users[taskData.assigned_to_index]?.id || global.adminUser.id,
             priority: taskData.priority || 'Medium',
             status: taskData.status || 'To Do',
             completed: taskData.completed || false,
@@ -144,13 +206,129 @@ const initiatePreData = async () => {
         );
 
         console.log(`✅ ${tasks.length} tasks created`);
+        global.tasks = tasks;
+      }
+
+      // Create project members
+      if (preData.project_members && preData.project_members.length > 0 && global.projects && global.users) {
+        const projectMembers = await ProjectMember.bulkCreate(
+          preData.project_members.map(memberData => ({
+            project_id: global.projects[memberData.project_index]?.id,
+            user_id: global.users[memberData.user_index]?.id,
+            role: memberData.role || 'member',
+          }))
+        );
+
+        console.log(`✅ ${projectMembers.length} project members created`);
+      }
+
+      // Create subtasks
+      if (preData.subtasks && preData.subtasks.length > 0 && global.tasks) {
+        const subtasks = await Subtask.bulkCreate(
+          preData.subtasks.map(subtaskData => ({
+            task_id: global.tasks[subtaskData.task_index]?.id,
+            title: subtaskData.title,
+            is_completed: subtaskData.is_completed || false,
+          }))
+        );
+
+        console.log(`✅ ${subtasks.length} subtasks created`);
+      }
+
+      // Create task comments
+      if (preData.task_comments && preData.task_comments.length > 0 && global.tasks && global.users) {
+        const comments = await TaskComment.bulkCreate(
+          preData.task_comments.map(commentData => ({
+            task_id: global.tasks[commentData.task_index]?.id,
+            user_id: global.users[commentData.user_index]?.id,
+            message: commentData.message,
+          }))
+        );
+
+        console.log(`✅ ${comments.length} task comments created`);
+      }
+
+      // Create labels
+      if (preData.labels && preData.labels.length > 0 && global.projects) {
+        const labels = await Label.bulkCreate(
+          preData.labels.map(labelData => ({
+            project_id: global.projects[labelData.project_index]?.id,
+            name: labelData.name,
+            color: labelData.color || null,
+          }))
+        );
+
+        console.log(`✅ ${labels.length} labels created`);
+        global.labels = labels;
+      }
+
+      // Create task labels
+      if (preData.task_labels && preData.task_labels.length > 0 && global.tasks && global.labels) {
+        const taskLabels = await TaskLabel.bulkCreate(
+          preData.task_labels.map(taskLabelData => ({
+            task_id: global.tasks[taskLabelData.task_index]?.id,
+            label_id: global.labels[taskLabelData.label_index]?.id,
+          }))
+        );
+
+        console.log(`✅ ${taskLabels.length} task labels created`);
+      }
+
+      // Create project favorites
+      if (preData.project_favorites && preData.project_favorites.length > 0 && global.projects && global.users) {
+        const favorites = await ProjectFavorite.bulkCreate(
+          preData.project_favorites.map(favData => ({
+            project_id: global.projects[favData.project_index]?.id,
+            user_id: global.users[favData.user_index]?.id,
+          }))
+        );
+
+        console.log(`✅ ${favorites.length} project favorites created`);
+      }
+
+      // Create mails
+      if (preData.mails && preData.mails.length > 0 && global.adminUser && global.users) {
+        const mails = await Mail.bulkCreate(
+          preData.mails.map(mailData => ({
+            sender_id: global.adminUser.id,
+            recipient_id: global.users[mailData.recipient_index]?.id || global.adminUser.id,
+            subject: mailData.subject,
+            body: mailData.body,
+            is_read: mailData.is_read || false,
+            is_starred: mailData.is_starred || false,
+            is_archived: mailData.is_archived || false,
+          }))
+        );
+
+        console.log(`✅ ${mails.length} mails created`);
+      }
+
+      // Create activity logs
+      if (preData.activity_logs && preData.activity_logs.length > 0 && global.tasks && global.projects && global.users) {
+        const activityLogs = await TaskActivityLog.bulkCreate(
+          preData.activity_logs.map(logData => ({
+            task_id: global.tasks[logData.task_index]?.id,
+            project_id: global.projects[logData.project_index]?.id,
+            activity_type: logData.activity_type,
+            description: logData.description,
+            old_value: logData.old_value || null,
+            new_value: logData.new_value || null,
+            updated_by: global.users[logData.updated_by_index]?.id || global.adminUser.id,
+          }))
+        );
+
+        console.log(`✅ ${activityLogs.length} activity logs created`);
       }
 
       // Clean up global variables
       delete global.adminUser;
+      delete global.users;
       delete global.sampleTeam;
       delete global.sampleProject;
+      delete global.projects;
       delete global.sections;
+      delete global.tasks;
+      delete global.labels;
 
       console.log('\n📋 Pre-data initialization complete!');
       

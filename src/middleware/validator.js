@@ -61,13 +61,36 @@ const validateProject = [
   handleValidationErrors,
 ];
 
-const validateProjectId = [
+// Validate project ID from params (for backward compatibility)
+const validateProjectIdParam = [
   param('projectId')
     .isInt().withMessage('Project ID must be a valid integer'),
   handleValidationErrors,
 ];
 
-// Task validation rules
+// Validate project ID from body (new approach)
+const validateProjectId = [
+  body('project_id')
+    .optional()
+    .isInt().withMessage('Project ID must be a valid integer'),
+  body('projectId')
+    .optional()
+    .isInt().withMessage('Project ID must be a valid integer'),
+  (req, res, next) => {
+    // At least one of project_id or projectId must be present
+    if (!req.body.project_id && !req.body.projectId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: [{ field: 'project_id', message: 'Project ID is required in request body' }],
+      });
+    }
+    next();
+  },
+  handleValidationErrors,
+];
+
+// Task validation rules (for creation)
 const validateTask = [
   body('project_id')
     .notEmpty().withMessage('Project ID is required')
@@ -94,8 +117,58 @@ const validateTask = [
   handleValidationErrors,
 ];
 
+// Task validation rules (for updates - all fields optional)
+const validateTaskUpdate = [
+  body('task_id')
+    .optional()
+    .isInt().withMessage('Task ID must be a valid integer'),
+  body('project_id')
+    .optional()
+    .isInt().withMessage('Project ID must be a valid integer'),
+  body('title')
+    .optional()
+    .trim()
+    .isLength({ min: 1, max: 255 }).withMessage('Task title must be between 1 and 255 characters'),
+  body('description')
+    .optional()
+    .isString().withMessage('Description must be a string'),
+  body('assigned_to')
+    .optional()
+    .isInt().withMessage('Assigned to must be a valid integer'),
+  body('priority')
+    .optional()
+    .isIn(['Low', 'Medium', 'High']).withMessage('Priority must be Low, Medium, or High'),
+  body('status')
+    .optional()
+    .isIn(['To Do', 'In Progress', 'Done', 'On Track', 'At Risk', 'Off Track']).withMessage('Invalid task status'),
+  body('due_date')
+    .optional()
+    .custom((value) => {
+      if (value === null || value === '') return true; // Allow null/empty to unset
+      return /^\d{4}-\d{2}-\d{2}/.test(value) || new Date(value).toString() !== 'Invalid Date';
+    }).withMessage('Due date must be a valid date (YYYY-MM-DD)'),
+  body('section_id')
+    .optional()
+    .isInt().withMessage('Section ID must be a valid integer'),
+  body('position')
+    .optional()
+    .isInt().withMessage('Position must be a valid integer'),
+  body('completed')
+    .optional()
+    .isBoolean().withMessage('Completed must be a boolean'),
+  handleValidationErrors,
+];
+
 const validateTaskId = [
   param('taskId')
+    .isInt().withMessage('Task ID must be a valid integer'),
+  handleValidationErrors,
+];
+
+// Validate task ID from body (for update operations)
+const validateTaskIdBody = [
+  body('task_id')
+    .notEmpty().withMessage('Task ID is required')
     .isInt().withMessage('Task ID must be a valid integer'),
   handleValidationErrors,
 ];
@@ -115,9 +188,33 @@ const validateSection = [
   handleValidationErrors,
 ];
 
-const validateSectionId = [
+// Validate section ID from params (for backward compatibility)
+const validateSectionIdParam = [
   param('sectionId')
     .isInt().withMessage('Section ID must be a valid integer'),
+  handleValidationErrors,
+];
+
+// Validate section ID from body (new approach)
+const validateSectionId = [
+  body('section_id')
+    .optional()
+    .isInt().withMessage('Section ID must be a valid integer'),
+  body('sectionId')
+    .optional()
+    .isInt().withMessage('Section ID must be a valid integer'),
+  (req, res, next) => {
+    // At least one of section_id or sectionId must be present for update/delete operations
+    if ((req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE') && 
+        !req.body.section_id && !req.body.sectionId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: [{ field: 'section_id', message: 'Section ID is required in request body' }],
+      });
+    }
+    next();
+  },
   handleValidationErrors,
 ];
 
@@ -157,19 +254,43 @@ const validateCommentId = [
   handleValidationErrors,
 ];
 
+const validateMemberId = [
+  param('id')
+    .isInt({ min: 1 }).withMessage('Member ID must be a positive integer'),
+  handleValidationErrors,
+];
+
+const validateUserId = [
+  param('userId')
+    .isInt({ min: 1 }).withMessage('User ID must be a positive integer'),
+  handleValidationErrors,
+];
+
+// Mail validation rules
+const validateMailId = [
+  param('mailId')
+    .isInt({ min: 1 }).withMessage('Mail ID must be a positive integer'),
+  handleValidationErrors,
+];
+
 module.exports = {
   validateUserRegistration,
   validateUserLogin,
   validateProject,
   validateProjectId,
   validateTask,
+  validateTaskUpdate,
   validateTaskId,
+  validateTaskIdBody,
   validateSection,
   validateSectionId,
   validateTeam,
   validateTeamId,
   validateTaskComment,
   validateCommentId,
+  validateMemberId,
+  validateUserId,
+  validateMailId,
   handleValidationErrors,
 };
 

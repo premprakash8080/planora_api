@@ -55,6 +55,11 @@ const Task = database.define('Task', {
     type: DataTypes.INTEGER,
     defaultValue: 0,
   },
+  // Note: parent_id commented out - column doesn't exist in database yet
+  // parent_id: {
+  //   type: DataTypes.BIGINT,
+  //   allowNull: true,
+  // },
   deleted_at: {
     type: DataTypes.DATE,
     allowNull: true,

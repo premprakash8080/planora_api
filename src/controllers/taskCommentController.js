@@ -1,12 +1,20 @@
 const { TaskComment, Task, User } = require('../models');
+const taskActivityLogger = require('../utils/taskActivityLogger');
 
 const taskCommentController = () => {
   // Get all comments for a task
   const getTaskComments = async (req, res) => {
-  try {
     const { taskId } = req.params;
 
-    const comments = await TaskComment.findAll({
+    try {
+      if (!taskId || isNaN(parseInt(taskId))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid task ID',
+        });
+      }
+
+      const comments = await TaskComment.findAll({
       where: { task_id: taskId },
       include: [
         { 
@@ -33,10 +41,17 @@ const taskCommentController = () => {
 
 // Get comment by ID
   const getCommentById = async (req, res) => {
-  try {
     const { commentId } = req.params;
 
-    const comment = await TaskComment.findByPk(commentId, {
+    try {
+      if (!commentId || isNaN(parseInt(commentId))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid comment ID',
+        });
+      }
+
+      const comment = await TaskComment.findByPk(commentId, {
       include: [
         { 
           model: User, 
@@ -69,12 +84,33 @@ const taskCommentController = () => {
 
 // Create new comment
   const createComment = async (req, res) => {
-  try {
     const { task_id, message } = req.body;
     const user_id = req.user.id;
 
-    // Verify task exists
-    const task = await Task.findByPk(task_id);
+    try {
+      if (!(task_id && message)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Missing params: task_id and message are required',
+        });
+      }
+
+      if (isNaN(parseInt(task_id))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid task ID',
+        });
+      }
+
+      if (!message.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Comment message cannot be empty',
+        });
+      }
+
+      // Verify task exists
+      const task = await Task.findByPk(task_id);
     if (!task) {
       return res.status(404).json({
         success: false,
@@ -97,8 +133,14 @@ const taskCommentController = () => {
           as: 'user', 
           attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'] 
         },
+        { model: Task, as: 'task' },
       ],
     });
+
+    // Log comment activity
+    if (commentWithUser.task) {
+      await taskActivityLogger.logTaskComment(commentWithUser.task, commentWithUser, user_id);
+    }
 
     res.status(201).json({
       success: true,
@@ -116,12 +158,26 @@ const taskCommentController = () => {
 
 // Update comment
   const updateComment = async (req, res) => {
-  try {
     const { commentId } = req.params;
     const { message } = req.body;
     const user_id = req.user.id;
 
-    const comment = await TaskComment.findByPk(commentId);
+    try {
+      if (!commentId || isNaN(parseInt(commentId))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid comment ID',
+        });
+      }
+
+      if (!message || !message.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Missing params: message is required',
+        });
+      }
+
+      const comment = await TaskComment.findByPk(commentId);
     if (!comment) {
       return res.status(404).json({
         success: false,
@@ -165,11 +221,18 @@ const taskCommentController = () => {
 
 // Delete comment
   const deleteComment = async (req, res) => {
-  try {
     const { commentId } = req.params;
     const user_id = req.user.id;
 
-    const comment = await TaskComment.findByPk(commentId);
+    try {
+      if (!commentId || isNaN(parseInt(commentId))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid comment ID',
+        });
+      }
+
+      const comment = await TaskComment.findByPk(commentId);
     if (!comment) {
       return res.status(404).json({
         success: false,

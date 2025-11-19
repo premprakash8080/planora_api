@@ -7,12 +7,32 @@
       "initials": "AU",
       "avatar_color": "#3b82f6",
       "status": "active"
+    },
+    {
+      "full_name": "John Doe",
+      "email": "john@planora.com",
+      "password": "john123",
+      "initials": "JD",
+      "avatar_color": "#10b981",
+      "status": "active"
+    },
+    {
+      "full_name": "Jane Smith",
+      "email": "jane@planora.com",
+      "password": "jane123",
+      "initials": "JS",
+      "avatar_color": "#8b5cf6",
+      "status": "active"
     }
   ],
   "teams": [
     {
       "name": "Development Team",
       "description": "Main development team for Planora project"
+    },
+    {
+      "name": "Design Team",
+      "description": "Design and UX team"
     }
   ],
   "projects": [
@@ -21,6 +41,39 @@
       "description": "Main project for Planora task management system",
       "color": "#3b82f6",
       "status": "in-progress"
+    },
+    {
+      "name": "Website Redesign",
+      "description": "Redesign the company website",
+      "color": "#10b981",
+      "status": "not-started"
+    }
+  ],
+  "project_members": [
+    {
+      "project_index": 0,
+      "user_index": 0,
+      "role": "owner"
+    },
+    {
+      "project_index": 0,
+      "user_index": 1,
+      "role": "member"
+    },
+    {
+      "project_index": 0,
+      "user_index": 2,
+      "role": "member"
+    },
+    {
+      "project_index": 1,
+      "user_index": 0,
+      "role": "owner"
+    },
+    {
+      "project_index": 1,
+      "user_index": 2,
+      "role": "manager"
     }
   ],
   "sections": [
@@ -45,7 +98,8 @@
       "status": "To Do",
       "completed": false,
       "position": 0,
-      "section_index": 0
+      "section_index": 0,
+      "assigned_to_index": 1
     },
     {
       "title": "Design database schema",
@@ -54,7 +108,8 @@
       "status": "To Do",
       "completed": false,
       "position": 1,
-      "section_index": 0
+      "section_index": 0,
+      "assigned_to_index": 0
     },
     {
       "title": "Implement authentication system",
@@ -63,7 +118,8 @@
       "status": "In Progress",
       "completed": false,
       "position": 0,
-      "section_index": 1
+      "section_index": 1,
+      "assigned_to_index": 1
     },
     {
       "title": "Create API documentation",
@@ -72,7 +128,231 @@
       "status": "Done",
       "completed": true,
       "position": 0,
-      "section_index": 2
+      "section_index": 2,
+      "assigned_to_index": 2
+    },
+    {
+      "title": "Design user interface",
+      "description": "Create mockups and wireframes for the application",
+      "priority": "High",
+      "status": "In Progress",
+      "completed": false,
+      "position": 1,
+      "section_index": 1,
+      "assigned_to_index": 2
+    }
+  ],
+  "subtasks": [
+    {
+      "task_index": 0,
+      "title": "Install Node.js and npm",
+      "is_completed": true
+    },
+    {
+      "task_index": 0,
+      "title": "Set up Git repository",
+      "is_completed": false
+    },
+    {
+      "task_index": 2,
+      "title": "Create login endpoint",
+      "is_completed": true
+    },
+    {
+      "task_index": 2,
+      "title": "Implement JWT tokens",
+      "is_completed": false
+    }
+  ],
+  "task_comments": [
+    {
+      "task_index": 0,
+      "user_index": 0,
+      "message": "Great progress on this task!"
+    },
+    {
+      "task_index": 0,
+      "user_index": 1,
+      "message": "I'll help with the setup."
+    },
+    {
+      "task_index": 2,
+      "user_index": 2,
+      "message": "Authentication is working well."
+    }
+  ],
+  "labels": [
+    {
+      "project_index": 0,
+      "name": "Frontend",
+      "color": "#3b82f6"
+    },
+    {
+      "project_index": 0,
+      "name": "Backend",
+      "color": "#10b981"
+    },
+    {
+      "project_index": 0,
+      "name": "Bug",
+      "color": "#ef4444"
+    },
+    {
+      "project_index": 0,
+      "name": "Feature",
+      "color": "#8b5cf6"
+    }
+  ],
+  "task_labels": [
+    {
+      "task_index": 0,
+      "label_index": 1
+    },
+    {
+      "task_index": 1,
+      "label_index": 1
+    },
+    {
+      "task_index": 2,
+      "label_index": 1
+    },
+    {
+      "task_index": 3,
+      "label_index": 0
+    },
+    {
+      "task_index": 4,
+      "label_index": 0
+    }
+  ],
+  "project_favorites": [
+    {
+      "project_index": 0,
+      "user_index": 0
+    },
+    {
+      "project_index": 0,
+      "user_index": 1
+    }
+  ],
+  "mails": [
+    {
+      "subject": "Welcome to Planora",
+      "body": "Welcome to Planora, the best task management system in the world. We're excited to have you on board!",
+      "recipient_index": 1,
+      "is_read": false,
+      "is_starred": false,
+      "is_archived": false
+    },
+    {
+      "subject": "Task Assignment",
+      "body": "You have been assigned to a new task: Set up development environment",
+      "recipient_index": 1,
+      "is_read": true,
+      "is_starred": true,
+      "is_archived": false
+    },
+    {
+      "subject": "Project Update",
+      "body": "The Planora Task Management project has been updated. Please review the changes.",
+      "recipient_index": 2,
+      "is_read": false,
+      "is_starred": false,
+      "is_archived": false
+    }
+  ],
+  "activity_logs": [
+    {
+      "task_index": 0,
+      "project_index": 0,
+      "activity_type": "created",
+      "description": "created the task",
+      "updated_by_index": 0
+    },
+    {
+      "task_index": 0,
+      "project_index": 0,
+      "activity_type": "assigned",
+      "description": "assigned the task to John Doe",
+      "old_value": null,
+      "new_value": {"assigned_to": "John Doe"},
+      "updated_by_index": 0
+    },
+    {
+      "task_index": 1,
+      "project_index": 0,
+      "activity_type": "created",
+      "description": "created the task",
+      "updated_by_index": 0
+    },
+    {
+      "task_index": 2,
+      "project_index": 0,
+      "activity_type": "created",
+      "description": "created the task",
+      "updated_by_index": 0
+    },
+    {
+      "task_index": 2,
+      "project_index": 0,
+      "activity_type": "status_changed",
+      "description": "changed status from To Do to In Progress",
+      "old_value": {"status": "To Do"},
+      "new_value": {"status": "In Progress"},
+      "updated_by_index": 1
+    },
+    {
+      "task_index": 2,
+      "project_index": 0,
+      "activity_type": "assigned",
+      "description": "assigned the task to John Doe",
+      "old_value": null,
+      "new_value": {"assigned_to": "John Doe"},
+      "updated_by_index": 0
+    },
+    {
+      "task_index": 3,
+      "project_index": 0,
+      "activity_type": "created",
+      "description": "created the task",
+      "updated_by_index": 0
+    },
+    {
+      "task_index": 3,
+      "project_index": 0,
+      "activity_type": "completed",
+      "description": "completed the task",
+      "updated_by_index": 2
+    },
+    {
+      "task_index": 0,
+      "project_index": 0,
+      "activity_type": "comment",
+      "description": "added a comment",
+      "updated_by_index": 0
+    },
+    {
+      "task_index": 0,
+      "project_index": 0,
+      "activity_type": "comment",
+      "description": "added a comment",
+      "updated_by_index": 1
+    },
+    {
+      "task_index": 4,
+      "project_index": 0,
+      "activity_type": "created",
+      "description": "created the task",
+      "updated_by_index": 0
+    },
+    {
+      "task_index": 4,
+      "project_index": 0,
+      "activity_type": "status_changed",
+      "description": "changed status from To Do to In Progress",
+      "old_value": {"status": "To Do"},
+      "new_value": {"status": "In Progress"},
+      "updated_by_index": 2
     }
   ]
 }

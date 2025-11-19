@@ -13,11 +13,15 @@ const dbService = (environment, migrate) => {
       alter: false,
     });
 
-  const successfulDBStart = () => {
+  const successfulDBStart = async () => {
     console.info(
       "connection to the database has been established successfully"
     );
-    initiatePreData();
+    // Initialize pre-data after a short delay to ensure tables are created
+    // The initiatePreData function will wait for tables to be ready
+    setTimeout(async () => {
+      await initiatePreData();
+    }, 2000);
     cron.schedule("0 0 * * *", async () => {
       let date = new Date();
       console.log("Creating Pending Reports for ", date);

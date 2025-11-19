@@ -7,6 +7,8 @@ const TeamMember = require('./TeamMember');
 const ProjectMember = require('./ProjectMember');
 const Subtask = require('./Subtask');
 const TaskComment = require('./TaskComment');
+const TaskActivityLog = require('./TaskActivityLog');
+const Mail = require('./Mail');
 const Attachment = require('./Attachment');
 const Label = require('./Label');
 const TaskLabel = require('./TaskLabel');
@@ -42,6 +44,9 @@ Task.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 Task.belongsTo(Section, { foreignKey: 'section_id', as: 'section' });
 Task.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
 Task.belongsTo(User, { foreignKey: 'assigned_to', as: 'assignee' });
+// Note: parent_id associations commented out - column doesn't exist in database yet
+// Task.belongsTo(Task, { foreignKey: 'parent_id', as: 'parent' }); // For subtasks
+// Task.hasMany(Task, { foreignKey: 'parent_id', as: 'childTasks' }); // Subtasks stored as tasks
 Task.hasMany(Subtask, { foreignKey: 'task_id', as: 'subtasks' });
 Task.hasMany(TaskComment, { foreignKey: 'task_id', as: 'comments' });
 Task.hasMany(Attachment, { foreignKey: 'task_id', as: 'attachments' });
@@ -61,6 +66,19 @@ Subtask.belongsTo(Task, { foreignKey: 'task_id', as: 'task' });
 // TaskComment associations
 TaskComment.belongsTo(Task, { foreignKey: 'task_id', as: 'task' });
 TaskComment.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// TaskActivityLog associations
+TaskActivityLog.belongsTo(Task, { foreignKey: 'task_id', as: 'task' });
+TaskActivityLog.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+TaskActivityLog.belongsTo(User, { foreignKey: 'updated_by', as: 'user' });
+Task.hasMany(TaskActivityLog, { foreignKey: 'task_id', as: 'activityLogs' });
+Project.hasMany(TaskActivityLog, { foreignKey: 'project_id', as: 'activityLogs' });
+
+// Mail associations
+Mail.belongsTo(User, { foreignKey: 'sender_id', as: 'sender' });
+Mail.belongsTo(User, { foreignKey: 'recipient_id', as: 'recipient' });
+User.hasMany(Mail, { foreignKey: 'sender_id', as: 'sentMails' });
+User.hasMany(Mail, { foreignKey: 'recipient_id', as: 'receivedMails' });
 
 // Attachment associations
 Attachment.belongsTo(Task, { foreignKey: 'task_id', as: 'task' });
@@ -88,6 +106,8 @@ module.exports = {
   ProjectMember,
   Subtask,
   TaskComment,
+  TaskActivityLog,
+  Mail,
   Attachment,
   Label,
   TaskLabel,

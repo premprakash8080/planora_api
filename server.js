@@ -32,7 +32,8 @@ app.get("/", function (req, res) {
 require("./src/config/routes").set_routes(app);
 
 // Error handling middleware (must be last)
-const { errorHandler, notFound } = require("./src/middleware/errorHandler");
+// 404 handler for routes that don't exist
+const { notFound, errorHandler } = require('./src/middleware/errorHandler');
 app.use(notFound);
 app.use(errorHandler);
 

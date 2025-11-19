@@ -14,6 +14,24 @@ exports.set_routes = (app) => {
   // Team Management Routes (all protected)
   const teams = require("../routes/teams");
   
+  // Dashboard Routes (all protected)
+  const dashboard = require("../routes/dashboard");
+  
+  // Activity Log Routes (all protected)
+  const taskActivityLogs = require("../routes/taskActivityLogs");
+  
+  // Member Routes (all protected)
+  const members = require("../routes/members");
+  
+  // Mail Routes (all protected)
+  const mails = require("../routes/mails");
+  
+  // Activity Log Routes (all protected)
+  const activityLogs = require("../routes/activityLogs");
+  
+  // Insights Routes (all protected)
+  const insights = require("../routes/insights");
+  
   // API Routes
   app.use("/api/users", users);
   app.use("/api/projects", projects);
@@ -21,4 +39,9 @@ exports.set_routes = (app) => {
   app.use("/api/sections", sections);
   app.use("/api/comments", taskComments);
   app.use("/api/teams", teams);
+  app.use("/api/dashboard", dashboard);
+  app.use("/api/activity-logs", activityLogs); // Use new unified activity logs route
+  app.use("/api/members", members);
+  app.use("/api/mails", mails);
+  app.use("/api/insights", insights);
 };

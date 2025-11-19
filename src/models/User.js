@@ -36,6 +36,11 @@ const User = database.define('User', {
     type: DataTypes.ENUM('active', 'inactive', 'suspended'),
     defaultValue: 'active',
   },
+  project_assign_count: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+    allowNull: false,
+  },
   deleted_at: {
     type: DataTypes.DATE,
     allowNull: true,

@@ -2,20 +2,25 @@ const express = require('express');
 const router = express.Router();
 const taskController = require('../controllers/taskController');
 const { authenticate } = require('../middleware/auth');
-const { validateTask, validateTaskId, validateProjectId } = require('../middleware/validator');
 
-const { getTasksByProject, getTaskById, createTask, updateTask, deleteTask, toggleTaskCompletion } = taskController();
+const { getTasksByProject, getTaskById, createTask, updateTask, deleteTask, toggleTaskCompletion, getTaskDashboardCounts, batchUpdateTasks } = taskController();
 
 // All routes require authentication
 router.use(authenticate);
 
 // Task routes
-router.get('/project/:projectId', validateProjectId, getTasksByProject);
-router.get('/:taskId', validateTaskId, getTaskById);
-router.post('/', validateTask, createTask);
-router.put('/:taskId', validateTaskId, validateTask, updateTask);
-router.delete('/:taskId', validateTaskId, deleteTask);
-router.patch('/:taskId/toggle-completion', validateTaskId, toggleTaskCompletion);
+// IMPORTANT: Specific routes must come before parameterized routes
+router.get('/getdashboardtaskcount', getTaskDashboardCounts);
+router.get('/get-task-by-project/:projectId', getTasksByProject);
+router.get('/gettaskbyid/:taskId', getTaskById);
+router.post('/createtask', createTask);
+// Update task - using PUT with taskId in body
+router.put('/updatetask', updateTask);
+// Alternative: Keep PUT with params for backward compatibility
+router.put('/updatetaskbyid/:taskId', updateTask);
+router.delete('/deletetaskbyid/:taskId', deleteTask); // deleteTask supports both req.body and req.params
+router.patch('/:taskId/toggle-completion', toggleTaskCompletion);
+router.post('/batchupdatetask', batchUpdateTasks);
 
 module.exports = router;
 

@@ -30,9 +30,16 @@ const teamController = () => {
 
   // Get team by ID
   const getTeamById = async (req, res) => {
+    const { teamId } = req.params;
+    const userId = req.user.id;
+
     try {
-      const { teamId } = req.params;
-      const userId = req.user.id;
+      if (!teamId || isNaN(parseInt(teamId))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid team ID',
+        });
+      }
 
       // Check if user is a member of the team
       const membership = await TeamMember.findOne({
@@ -80,9 +87,23 @@ const teamController = () => {
 
   // Create new team
   const createTeam = async (req, res) => {
+    const { name, description } = req.body;
+    const created_by = req.user.id;
+
     try {
-      const { name, description } = req.body;
-      const created_by = req.user.id;
+      if (!name || name.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Missing params: name is required',
+        });
+      }
+
+      if (name.length > 150) {
+        return res.status(400).json({
+          success: false,
+          message: 'Team name must be 150 characters or less',
+        });
+      }
 
       const team = await Team.create({
         name,
@@ -124,10 +145,31 @@ const teamController = () => {
 
   // Update team
   const updateTeam = async (req, res) => {
+    const { teamId } = req.params;
+    const userId = req.user.id;
+    const { name, description } = req.body;
+
     try {
-      const { teamId } = req.params;
-      const userId = req.user.id;
-      const { name, description } = req.body;
+      if (!teamId || isNaN(parseInt(teamId))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid team ID',
+        });
+      }
+
+      if (name && name.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Team name cannot be empty',
+        });
+      }
+
+      if (name && name.length > 150) {
+        return res.status(400).json({
+          success: false,
+          message: 'Team name must be 150 characters or less',
+        });
+      }
 
       // Check if user is owner or admin
       const membership = await TeamMember.findOne({
@@ -173,9 +215,16 @@ const teamController = () => {
 
   // Delete team
   const deleteTeam = async (req, res) => {
+    const { teamId } = req.params;
+    const userId = req.user.id;
+
     try {
-      const { teamId } = req.params;
-      const userId = req.user.id;
+      if (!teamId || isNaN(parseInt(teamId))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid team ID',
+        });
+      }
 
       // Check if user is owner
       const membership = await TeamMember.findOne({
@@ -213,10 +262,24 @@ const teamController = () => {
 
   // Add member to team
   const addMember = async (req, res) => {
+    const { teamId } = req.params;
+    const userId = req.user.id;
+    const { user_id, role = 'member' } = req.body;
+
     try {
-      const { teamId } = req.params;
-      const userId = req.user.id;
-      const { user_id, role = 'member' } = req.body;
+      if (!teamId || isNaN(parseInt(teamId))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid team ID',
+        });
+      }
+
+      if (!user_id || isNaN(parseInt(user_id))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Missing params: user_id is required',
+        });
+      }
 
       // Check if requester is owner or admin
       const requesterMembership = await TeamMember.findOne({
@@ -277,9 +340,23 @@ const teamController = () => {
 
   // Remove member from team
   const removeMember = async (req, res) => {
+    const { teamId, memberId } = req.params;
+    const userId = req.user.id;
+
     try {
-      const { teamId, memberId } = req.params;
-      const userId = req.user.id;
+      if (!teamId || isNaN(parseInt(teamId))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid team ID',
+        });
+      }
+
+      if (!memberId || isNaN(parseInt(memberId))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid member ID',
+        });
+      }
 
       // Check if requester is owner or admin
       const requesterMembership = await TeamMember.findOne({
