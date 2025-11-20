@@ -37,6 +37,9 @@ exports.set_routes = (app) => {
   
   // Priority Label Routes (all protected)
   const priorityLabels = require("../routes/priorityLabels");
+
+  // Board View Routes (all protected)
+  const boardView = require("../routes/boardView");
   
   // API Routes
   app.use("/api/users", users);
@@ -52,4 +55,5 @@ exports.set_routes = (app) => {
   app.use("/api/insights", insights);
   app.use("/api/task-statuses", taskStatuses);
   app.use("/api/priority-labels", priorityLabels);
+  app.use("/api/board-view", boardView);
 };

@@ -67,6 +67,7 @@ CREATE TABLE projects (
     color VARCHAR(20),
     created_by BIGINT NOT NULL,
     status ENUM('not-started', 'in-progress', 'on-hold', 'completed') DEFAULT 'not-started',
+    health_status ENUM('on-track', 'at-risk', 'off-track') DEFAULT 'on-track',
     is_archived BOOLEAN DEFAULT FALSE,
     due_date DATE NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -81,6 +82,7 @@ CREATE INDEX idx_projects_team_id ON projects(team_id);
 CREATE INDEX idx_projects_name ON projects(name);
 CREATE INDEX idx_projects_created_by ON projects(created_by);
 CREATE INDEX idx_projects_status ON projects(status);
+CREATE INDEX idx_projects_health_status ON projects(health_status);
 CREATE INDEX idx_projects_is_archived ON projects(is_archived);
 CREATE INDEX idx_projects_due_date ON projects(due_date);
 

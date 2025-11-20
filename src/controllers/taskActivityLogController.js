@@ -37,6 +37,7 @@ const taskActivityLogController = () => {
   const getInboxActivities = async (req, res) => {
     const userId = req.user.id;
     const { limit = 50, offset = 0 } = req.query;
+    const formatDateTime = req.formatDateTime || ((date) => date);
 
     try {
       // Get all projects the user is involved in (as creator, member, or assigned tasks)
@@ -80,10 +81,19 @@ const taskActivityLogController = () => {
         limit: parseInt(limit),
         offset: parseInt(offset)
       });
+      const formattedActivities = activities.map((activity) => {
+        const plain = activity.toJSON();
+        const createdAt = plain.created_at || plain.createdAt;
+        console.log(createdAt);
+        return {
+          ...plain,
+          created_at: createdAt? formatDateTime(createdAt, 'YYYY-MM-DD HH'): null,
+        };
+      });
 
       res.json({
         success: true,
-        data: { activities }
+        data: { activities: formattedActivities }
       });
     } catch (error) {
       res.status(500).json({
@@ -97,6 +107,7 @@ const taskActivityLogController = () => {
   // Get activity logs for a specific task
   const getTaskActivities = async (req, res) => {
     const { taskId } = req.params;
+    const formatDateTime = req.formatDateTime || ((date) => date);
 
     try {
       if (!taskId || isNaN(parseInt(taskId))) {
@@ -118,9 +129,20 @@ const taskActivityLogController = () => {
         order: [['created_at', 'DESC']]
       });
 
+      const formattedActivities = activities.map((activity) => {
+        const plain = activity.toJSON();
+        const createdAt = plain.created_at || plain.createdAt;
+        return {
+          ...plain,
+          created_at: createdAt
+            ? formatDateTime(createdAt, 'YYYY-MM-DD HH:mm:ss')
+            : null,
+        };
+      });
+
       res.json({
         success: true,
-        data: { activities }
+        data: { activities: formattedActivities }
       });
     } catch (error) {
       res.status(500).json({

@@ -1,6 +1,44 @@
 /**
  * Helper functions for Task operations
  */
+const moment = require('moment-timezone');
+
+const DEFAULT_TIMEZONE = process.env.APP_TIMEZONE || 'Asia/Kolkata';
+
+/**
+ * Format a date using the configured timezone
+ * @param {Date|string|number} date - Date value to format
+ * @param {string} format - Moment format string (default DD MM YY)
+ * @param {string} timezone - Optional timezone override
+ * @returns {string|null}
+ */
+const formatTaskDate = (date, format = 'DD MM YY', timezone = DEFAULT_TIMEZONE) => {
+    if (!date) return null;
+    return moment(date).tz(timezone).format(format);
+};
+
+/**
+ * Format a date-time value with time component
+ * @param {Date|string|number} date
+ * @param {string} format
+ * @param {string} timezone
+ * @returns {string|null}
+ */
+const formatTaskDateTime = (date, format = 'YYYY-MM-DD HH:mm:ss', timezone = DEFAULT_TIMEZONE) => {
+    if (!date) return null;
+    return moment(date).tz(timezone).format(format);
+};
+
+/**
+ * Get relative time string (e.g., "2 hours ago")
+ * @param {Date|string|number} date
+ * @param {string} timezone
+ * @returns {string|null}
+ */
+const formatTaskRelativeTime = (date, timezone = DEFAULT_TIMEZONE) => {
+    if (!date) return null;
+    return moment(date).tz(timezone).fromNow();
+};
 
 /**
  * Compare old and new values to find what changed
@@ -95,6 +133,9 @@ const generateActivityDescription = (changes) => {
 };
 
 module.exports = {
+    formatTaskDate,
+    formatTaskDateTime,
+    formatTaskRelativeTime,
     findChangedSet,
     determineActivityType,
     generateActivityDescription

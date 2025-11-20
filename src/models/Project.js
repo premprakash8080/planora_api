@@ -31,6 +31,11 @@ const Project = database.define('Project', {
     type: DataTypes.ENUM('not-started', 'in-progress', 'on-hold', 'completed'),
     defaultValue: 'not-started',
   },
+  health_status: {
+    type: DataTypes.ENUM('on-track', 'at-risk', 'off-track'),
+    allowNull: true,
+    defaultValue: 'on-track',
+  },
   is_archived: {
     type: DataTypes.BOOLEAN,
     defaultValue: false,

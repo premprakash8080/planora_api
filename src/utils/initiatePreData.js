@@ -156,6 +156,7 @@ const initiatePreData = async () => {
             color: projectData.color || null,
             created_by: global.adminUser.id,
             status: projectData.status || 'not-started',
+            health_status: projectData.health_status || 'on-track',
             team_id: global.sampleTeam ? global.sampleTeam.id : null,
           });
 

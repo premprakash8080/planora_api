@@ -40,13 +40,15 @@
       "name": "Planora Task Management",
       "description": "Main project for Planora task management system",
       "color": "#3b82f6",
-      "status": "in-progress"
+      "status": "in-progress",
+      "health_status": "on-track"
     },
     {
       "name": "Website Redesign",
       "description": "Redesign the company website",
       "color": "#10b981",
-      "status": "not-started"
+      "status": "not-started",
+      "health_status": "at-risk"
     }
   ],
   "project_members": [

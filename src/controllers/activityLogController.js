@@ -1,6 +1,60 @@
 const { TaskActivityLog, Task, Project, User, TaskStatus, PriorityLabel } = require('../models');
 const { Op } = require('sequelize');
 const { successResponse, errorResponse, paginationMeta } = require('../utils/responseFormatter');
+const { formatTaskDate, formatTaskRelativeTime } = require('../utils/taskHelpers');
+
+const mapActivityTypeToUpdateType = (activityType) => {
+  switch (activityType) {
+    case 'created':
+      return 'created';
+    case 'completed':
+      return 'completed';
+    case 'assigned':
+      return 'assigned';
+    case 'comment':
+      return 'comment';
+    case 'status_changed':
+    case 'priority_changed':
+    case 'due_date_changed':
+    case 'updated':
+      return 'updated';
+    default:
+      return 'updated';
+  }
+};
+
+const getUpdateIcon = (updateType) => {
+  const iconMap = {
+    created: 'add_circle',
+    updated: 'edit',
+    completed: 'check_circle',
+    assigned: 'person_add',
+    comment: 'comment',
+  };
+  return iconMap[updateType] || 'info';
+};
+
+const getUpdateIconColor = (updateType) => {
+  const colorMap = {
+    created: '#9c27b0',
+    updated: '#2196f3',
+    completed: '#4caf50',
+    assigned: '#ff9800',
+    comment: '#3f51b5',
+  };
+  return colorMap[updateType] || '#9e9e9e';
+};
+
+const getUpdateIconBackground = (updateType) => {
+  const backgroundMap = {
+    created: '#f3e5f5',
+    updated: '#e3f2fd',
+    completed: '#e8f5e9',
+    assigned: '#fff3e0',
+    comment: '#e8eaf6',
+  };
+  return backgroundMap[updateType] || '#f5f5f5';
+};
 
 const activityLogController = () => {
   /**
@@ -43,7 +97,16 @@ const activityLogController = () => {
 
       const meta = paginationMeta(page, limit, count);
 
-      res.json(successResponse({ logs }, null, meta));
+      const formattedLogs = logs.map((log) => {
+        const plain = log.toJSON ? log.toJSON() : log;
+        const createdAt = plain.created_at || plain.createdAt;
+        return {
+          ...plain,
+          created_at: createdAt ? formatTaskDate(createdAt, 'DD MM YY') : null,
+        };
+      });
+
+      res.json(successResponse({ logs: formattedLogs }, null, meta));
     } catch (error) {
       res.status(500).json(errorResponse('Failed to fetch activity logs', 500));
     }
@@ -55,6 +118,17 @@ const activityLogController = () => {
   const getProjectActivityLogs = async (req, res) => {
     const { projectId } = req.params;
     const { page = 1, limit = 50 } = req.query;
+    const formatDate = req.formatDate || ((date, format = 'DD MM YY') => date);
+
+    const formatLogs = (items) =>
+      items.map((log) => {
+        const plain = log.toJSON ? log.toJSON() : log;
+        const createdAt = plain.created_at || plain.createdAt;
+        return {
+          ...plain,
+          created_at: createdAt ? formatDate(createdAt, 'DD MM YY') : null,
+        };
+      });
 
     try {
       if (!projectId || isNaN(parseInt(projectId))) {
@@ -90,7 +164,8 @@ const activityLogController = () => {
 
       const meta = paginationMeta(page, limit, count);
 
-      res.json(successResponse({ logs }, null, meta));
+      const formattedLogs = formatLogs(logs);
+      res.json(successResponse({ logs: formattedLogs }, null, meta));
     } catch (error) {
       res.status(500).json(errorResponse('Failed to fetch activity logs', 500));
     }
@@ -103,6 +178,17 @@ const activityLogController = () => {
     try {
       const userId = req.user.id;
       const { limit = 20 } = req.query;
+      const formatDate = req.formatDate || ((date, format = 'DD MM YY') => date);
+
+      const formatLogs = (items) =>
+        items.map((log) => {
+          const plain = log.toJSON ? log.toJSON() : log;
+          const createdAt = plain.created_at || plain.createdAt;
+          return {
+            ...plain,
+            created_at: createdAt ? formatDate(createdAt, 'DD MM YY') : null,
+          };
+        });
 
       const logs = await TaskActivityLog.findAll({
         where: {
@@ -134,7 +220,8 @@ const activityLogController = () => {
         limit: parseInt(limit)
       });
 
-      res.json(successResponse({ logs }));
+      const formattedLogs = formatLogs(logs);
+      res.json(successResponse({ logs: formattedLogs }));
     } catch (error) {
       console.error('Error fetching recent activity logs:', error);
       res.status(500).json(errorResponse('Failed to fetch recent activity logs', 500));
@@ -198,8 +285,35 @@ const activityLogController = () => {
       });
 
       const meta = paginationMeta(req.query.page || 1, limit, count);
+      const timezone = req.app?.locals?.timezone;
 
-      res.json(successResponse({ activities }, null, meta));
+      const formattedActivities = activities.map((activity) => {
+        const plain = activity.toJSON ? activity.toJSON() : activity;
+        const createdAt = plain.created_at || plain.createdAt;
+        const updateType = mapActivityTypeToUpdateType(plain.activity_type);
+        const userName = plain.user?.full_name || 'Unknown User';
+        const initials =
+          plain.user?.initials ||
+          (userName ? userName.split(' ').map((n) => n.charAt(0)).join('').substring(0, 2).toUpperCase() : 'U');
+
+        return {
+          id: plain.id.toString(),
+          taskName: plain.task?.title || 'Unknown Task',
+          projectName: plain.project?.name || 'Unknown Project',
+          updateType,
+          updateDescription: plain.description,
+          time: createdAt ? formatTaskDate(createdAt, 'DD MMM YY', timezone) : null,
+          timeAgo: createdAt ? formatTaskRelativeTime(createdAt, timezone) : null,
+          userName,
+          userAvatar: plain.user?.avatar_url || null,
+          userInitials: initials,
+          icon: getUpdateIcon(updateType),
+          iconColor: getUpdateIconColor(updateType),
+          iconBackground: getUpdateIconBackground(updateType),
+        };
+      });
+
+      res.json(successResponse({ activities: formattedActivities }, null, meta));
     } catch (error) {
       console.error('Error fetching inbox activities:', error);
       res.status(500).json(errorResponse(`Failed to fetch inbox activities: ${error.message}`, 500));

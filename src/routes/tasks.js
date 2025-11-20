@@ -3,7 +3,7 @@ const router = express.Router();
 const taskController = require('../controllers/taskController');
 const { authenticate } = require('../middleware/auth');
 
-const { getTasksByProject, getTaskById, createTask, updateTask, deleteTask, toggleTaskCompletion, getTaskDashboardCounts, batchUpdateTasks } = taskController();
+const { getTasksByProject, getTaskById, createTask, updateTask, deleteTask, toggleTaskCompletion, batchUpdateTasks } = taskController();
 
 // All routes require authentication
 router.use(authenticate);

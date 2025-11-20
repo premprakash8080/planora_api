@@ -1,4 +1,4 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes, Op } = require('sequelize');
 const database = require('../config/database');
 const taskActivityLogger = require('../utils/taskActivityLogger');
 const { findChangedSet, determineActivityType, generateActivityDescription } = require('../utils/taskHelpers');
@@ -74,54 +74,91 @@ const Task = database.define('Task', {
   deletedAt: 'deleted_at',
 });
 
-// Hook: beforeCreate - Log task creation
+// Hook: beforeCreate - Prepare and log task creation
 Task.beforeCreate(async (task, options) => {
-  // Store the userId in instance for afterCreate hook
-  // We'll use created_by field which is already set
-  task._activityUserId = options?.userId || task.created_by;
-});
-
-// Hook: afterCreate - Create activity log for task creation
-Task.afterCreate(async (task, options) => {
   try {
-    const userId = options?.userId || task.created_by || task._activityUserId;
-    if (userId && task.id && task.project_id) {
-      await taskActivityLogger.logTaskCreated(task, userId);
-    }
-  } catch (error) {
-    // Log error but don't throw - activity logging shouldn't break the main operation
-    console.error('Failed to log task creation activity:', error);
-  }
-});
-
-// Hook: beforeUpdate - Store old values and userId for activity logging
-Task.beforeUpdate(async (task, options) => {
-  // Store old values for comparison using Sequelize's previous() method
-  const changedFields = task.changed() || [];
-  task._oldValues = {};
-  changedFields.forEach(field => {
-    task._oldValues[field] = task.previous(field);
-  });
-  // Store userId from options if provided
-  task._activityUserId = options?.userId;
-});
-
-// Hook: afterUpdate - Create activity log for task updates
-Task.afterUpdate(async (task, options) => {
-  try {
-    const userId = options?.userId || task._activityUserId;
-    if (!userId) {
-      // If no userId provided, skip logging (might be a system update)
+    const userId = options?.userId || task.created_by;
+    
+    if (!userId || !task.project_id) {
       return;
     }
 
+    // Store task data for logging
+    task._activityUserId = userId;
+    task._shouldLogCreation = true;
+    
+    // Store task data for deferred logging (since ID is needed but not available yet)
+    const taskData = {
+      title: task.title,
+      project_id: task.project_id,
+      userId: userId,
+      created_at: new Date()
+    };
+    
+    // Defer logging until after the task is saved and has an ID
+    // Use process.nextTick to ensure it runs after the current save operation
+    process.nextTick(async () => {
+      try {
+        // Small delay to ensure the task has been saved to the database
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Find the task by matching title, project_id, and recent creation time
+        const { Task: TaskModel } = require('./index');
+        const savedTask = await TaskModel.findOne({
+          where: {
+            title: taskData.title,
+            project_id: taskData.project_id,
+            created_at: {
+              [Op.gte]: new Date(Date.now() - 5000) // Within last 5 seconds
+            }
+          },
+          order: [['createdAt', 'DESC']],
+          limit: 1
+        });
+        
+        if (savedTask && savedTask.id) {
+          await taskActivityLogger.logTaskCreated(savedTask, taskData.userId);
+        }
+      } catch (error) {
+        console.error('Failed to log task creation activity:', error);
+      }
+    });
+  } catch (error) {
+    // Log error but don't throw - activity logging shouldn't break the main operation
+    console.error('Failed to prepare task creation activity log:', error);
+  }
+});
+
+// Hook: beforeUpdate - Log task updates
+Task.beforeUpdate(async (task, options) => {
+  try {
+    const userId = options?.userId;
+    
+    // Skip logging if no userId provided (might be a system update)
+    if (!userId) {
+      return;
+    }
+
+    // Skip if task doesn't have required fields
     if (!task.id || !task.project_id) {
       return;
     }
 
-    // Get old values that were stored in beforeUpdate
-    const oldValues = task._oldValues || {};
-    const newValues = task.dataValues || {};
+    // Get old values using Sequelize's previous() method
+    const changedFields = task.changed() || [];
+    if (changedFields.length === 0) {
+      // No changes, skip logging
+      return;
+    }
+
+    const oldValues = {};
+    const newValues = {};
+    
+    // Build old and new value objects for changed fields
+    changedFields.forEach(field => {
+      oldValues[field] = task.previous(field);
+      newValues[field] = task.dataValues[field];
+    });
 
     // Track changes for key fields
     const fieldsToTrack = ['title', 'task_status_id', 'priority_label_id', 'assigned_to', 'due_date', 'description', 'completed'];
@@ -129,13 +166,14 @@ Task.afterUpdate(async (task, options) => {
     // Use helper function to find changed set
     const { changes, oldValue, newValue } = findChangedSet(oldValues, newValues, fieldsToTrack);
 
-    // Only log if there are actual changes
+    // Only log if there are actual changes in tracked fields
     if (changes.length > 0) {
       // Determine activity type and description using helper functions
       const activityType = determineActivityType(changes);
       const description = generateActivityDescription(changes);
       
-      await taskActivityLogger.logActivity({
+      // Store logging data for deferred execution
+      const logData = {
         taskId: task.id,
         projectId: task.project_id,
         activityType,
@@ -143,11 +181,20 @@ Task.afterUpdate(async (task, options) => {
         updatedBy: userId,
         oldValue,
         newValue
+      };
+      
+      // Log activity asynchronously (use setImmediate to ensure it doesn't block the update)
+      setImmediate(async () => {
+        try {
+          await taskActivityLogger.logActivity(logData);
+        } catch (error) {
+          console.error('Failed to log task update activity:', error);
+        }
       });
     }
   } catch (error) {
     // Log error but don't throw - activity logging shouldn't break the main operation
-    console.error('Failed to log task update activity:', error);
+    console.error('Failed to prepare task update activity log:', error);
   }
 });
 
