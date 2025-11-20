@@ -21,6 +21,7 @@ const CustomField = require('./CustomField');
 const CustomFieldValue = require('./CustomFieldValue');
 const TaskReaction = require('./TaskReaction');
 const InboxNotification = require('./InboxNotification');
+const ProjectMessage = require('./ProjectMessage');
 
 // Define associations
 // User associations
@@ -33,6 +34,7 @@ User.hasMany(TaskFollower, { foreignKey: 'user_id', as: 'followedTasks' });
 User.hasMany(TaskReaction, { foreignKey: 'user_id', as: 'taskReactions' });
 User.hasMany(InboxNotification, { foreignKey: 'user_id', as: 'notifications' });
 User.hasMany(CustomField, { foreignKey: 'created_by', as: 'createdCustomFields' });
+User.hasMany(ProjectMessage, { foreignKey: 'author_id', as: 'projectMessages' });
 
 // Team associations
 Team.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
@@ -51,6 +53,7 @@ Project.hasMany(TaskStatus, { foreignKey: 'project_id', as: 'taskStatuses' });
 Project.hasMany(PriorityLabel, { foreignKey: 'project_id', as: 'priorityLabels' });
 Project.hasMany(CustomField, { foreignKey: 'project_id', as: 'customFields' });
 Project.hasMany(InboxNotification, { foreignKey: 'project_id', as: 'notifications' });
+Project.hasMany(ProjectMessage, { foreignKey: 'project_id', as: 'messages' });
 
 // Section associations
 Section.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
@@ -156,6 +159,10 @@ InboxNotification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 InboxNotification.belongsTo(Task, { foreignKey: 'task_id', as: 'task' });
 InboxNotification.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 
+// ProjectMessage associations
+ProjectMessage.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+ProjectMessage.belongsTo(User, { foreignKey: 'author_id', as: 'author' });
+
 module.exports = {
   User,
   Team,
@@ -180,5 +187,6 @@ module.exports = {
   CustomFieldValue,
   TaskReaction,
   InboxNotification,
+  ProjectMessage,
 };
 

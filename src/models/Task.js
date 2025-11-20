@@ -49,6 +49,10 @@ const Task = database.define('Task', {
     type: DataTypes.DATEONLY,
     allowNull: true,
   },
+  start_date: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+  },
   comments_count: {
     type: DataTypes.INTEGER,
     defaultValue: 0,

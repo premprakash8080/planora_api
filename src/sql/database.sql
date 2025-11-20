@@ -135,6 +135,7 @@ CREATE TABLE tasks (
     priority ENUM('Low', 'Medium', 'High') DEFAULT 'Medium',
     status ENUM('To Do', 'In Progress', 'Done', 'On Track', 'At Risk', 'Off Track') DEFAULT 'To Do',
     completed BOOLEAN DEFAULT FALSE,
+    start_date DATE NULL,
     due_date DATE NULL,
     comments_count INT DEFAULT 0, -- Cached count for performance
     position INT DEFAULT 0, -- For ordering within section
@@ -305,6 +306,29 @@ CREATE TABLE project_favorites (
 -- Indexes
 CREATE INDEX idx_project_favorites_project_id ON project_favorites(project_id);
 CREATE INDEX idx_project_favorites_user_id ON project_favorites(user_id);
+
+-- ==========================================================
+-- PROJECT MESSAGES (Team chat inside projects)
+-- ==========================================================
+CREATE TABLE project_messages (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    project_id BIGINT NOT NULL,
+    author_id BIGINT NOT NULL,
+    content TEXT NOT NULL,
+    pinned BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Indexes
+CREATE INDEX idx_project_messages_project_id ON project_messages(project_id);
+CREATE INDEX idx_project_messages_author_id ON project_messages(author_id);
+CREATE INDEX idx_project_messages_created_at ON project_messages(created_at);
+CREATE INDEX idx_project_messages_pinned ON project_messages(pinned);
+CREATE INDEX idx_project_messages_project_created ON project_messages(project_id, created_at);
 
 -- ==========================================================
 -- MAILS

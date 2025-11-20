@@ -1,4 +1,4 @@
-const { Project, Section, Task, User, ProjectMember, ProjectFavorite, TaskStatus, PriorityLabel, TaskActivityLog } = require('../models');
+const { Project, Section, Task, User, ProjectMember, ProjectFavorite, TaskStatus, PriorityLabel, TaskActivityLog, ProjectMessage } = require('../models');
 const { Op } = require('sequelize');
 const { successResponse, errorResponse } = require('../utils/responseFormatter');
 const { formatTaskDate, formatTaskDateTime, formatTaskRelativeTime } = require('../utils/taskHelpers');
@@ -19,6 +19,7 @@ const projectController = () => {
       return null;
     }
     const plain = task.toJSON ? task.toJSON() : task;
+    const startDate = plain.start_date || plain.startDate || null;
     const dueDate = plain.due_date || plain.dueDate || null;
     const assignee = plain.assignee || null;
     const priorityLabel = plain.priorityLabel || null;
@@ -41,6 +42,8 @@ const projectController = () => {
       description: plain.description || '',
       completed: !!plain.completed,
       order: typeof plain.position === 'number' ? plain.position : 0,
+      startDate,
+      startDateDisplay: startDate ? formatters.formatDate(startDate, 'MMM D, YYYY') : null,
       dueDate,
       dueDateDisplay: dueDate ? formatters.formatDate(dueDate, 'MMM D, YYYY') : null,
       dueDateRelative: dueDate ? formatters.formatRelativeTime(dueDate) : null,
@@ -164,6 +167,420 @@ const projectController = () => {
       required: false,
     },
   ];
+
+  const formatTimelineTask = (task, formatters) => {
+    if (!task) {
+      return null;
+    }
+
+    const plain = task.toJSON ? task.toJSON() : task;
+    const startDateValue = plain.start_date || plain.startDate || plain.due_date || plain.created_at || new Date();
+    const dueDateValue = plain.due_date || plain.dueDate || startDateValue;
+    const assignee = plain.assignee || null;
+    const priorityLabel = plain.priorityLabel || null;
+    const taskStatus = plain.taskStatus || null;
+
+    const startDate = startDateValue ? formatters.formatDateTime(startDateValue, 'YYYY-MM-DD') : null;
+    const dueDate = dueDateValue ? formatters.formatDateTime(dueDateValue, 'YYYY-MM-DD') : null;
+    const initials = assignee?.initials
+      || (assignee?.full_name
+        ? assignee.full_name
+            .split(' ')
+            .map(part => part.charAt(0))
+            .join('')
+            .substring(0, 2)
+            .toUpperCase()
+        : null);
+
+    return {
+      id: plain.id?.toString(),
+      sectionId: plain.section_id ? plain.section_id.toString() : null,
+      title: plain.title,
+      description: plain.description || '',
+      completed: !!plain.completed,
+      order: typeof plain.position === 'number' ? plain.position : 0,
+      startDate,
+      startDateDisplay: startDateValue ? formatters.formatDate(startDateValue, 'MMM D, YYYY') : null,
+      dueDate,
+      dueDateDisplay: dueDateValue ? formatters.formatDate(dueDateValue, 'MMM D, YYYY') : null,
+      dueDateRelative: dueDateValue ? formatters.formatRelativeTime(dueDateValue) : null,
+      assigneeName: assignee?.full_name || null,
+      assigneeInitials: initials,
+      assigneeColor: assignee?.avatar_color || null,
+      userAvatar: assignee?.avatar_url || null,
+      priorityLabel: priorityLabel
+        ? {
+            id: priorityLabel.id?.toString(),
+            name: priorityLabel.name,
+            color: priorityLabel.color || null,
+          }
+        : null,
+      status: taskStatus
+        ? {
+            id: taskStatus.id?.toString(),
+            name: taskStatus.name,
+            color: taskStatus.color || null,
+          }
+        : null,
+    };
+  };
+
+  const formatCalendarTask = (task, formatters, fallbackProject = null) => {
+    if (!task) {
+      return null;
+    }
+
+    const plain = task.toJSON ? task.toJSON() : task;
+    const assignee = plain.assignee || null;
+    const startDateValue = plain.start_date || plain.startDate || plain.due_date || plain.created_at || null;
+    const dueDateValue = plain.due_date || plain.dueDate || startDateValue;
+    const projectColor = plain.project?.color || fallbackProject?.color || '#3b82f6';
+    const initials = assignee?.initials
+      || (assignee?.full_name
+        ? assignee.full_name
+            .split(' ')
+            .map(part => part.charAt(0))
+            .join('')
+            .substring(0, 2)
+            .toUpperCase()
+        : null);
+
+    return {
+      id: plain.id?.toString(),
+      title: plain.title,
+      completed: !!plain.completed,
+      startDate: startDateValue ? formatters.formatDateTime(startDateValue, 'YYYY-MM-DD') : null,
+      dueDate: dueDateValue ? formatters.formatDateTime(dueDateValue, 'YYYY-MM-DD') : null,
+      projectColor,
+      assignee: assignee
+        ? {
+            id: assignee.id?.toString(),
+            name: assignee.full_name,
+            initials,
+            color: assignee.avatar_color || '#94a3b8',
+          }
+        : null,
+      description: plain.description || '',
+      sectionId: plain.section_id ? plain.section_id.toString() : null,
+    };
+  };
+
+  const normalizeDate = (value) => {
+    if (!value) {
+      return null;
+    }
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+
+  const buildCompletionTrend = (tasks, formatters, rangeDays = 10) => {
+    const today = normalizeDate(new Date());
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - (rangeDays - 1));
+
+    const createdMap = new Map();
+    const completedMap = new Map();
+
+    tasks.forEach(task => {
+      const createdAt = normalizeDate(task.created_at || task.createdAt || task.createdAt);
+      if (createdAt && createdAt >= startDate) {
+        const key = createdAt.toISOString().slice(0, 10);
+        createdMap.set(key, (createdMap.get(key) || 0) + 1);
+      }
+
+      if (task.completed) {
+        const completedAt = normalizeDate(task.updated_at || task.updatedAt || task.due_date || task.dueDate);
+        if (completedAt && completedAt >= startDate) {
+          const key = completedAt.toISOString().slice(0, 10);
+          completedMap.set(key, (completedMap.get(key) || 0) + 1);
+        }
+      }
+    });
+
+    const data = [];
+    const cursor = new Date(startDate);
+    let totalCount = 0;
+    let completedCount = 0;
+    const maxDate = new Date(today);
+
+    while (cursor <= maxDate) {
+      const key = cursor.toISOString().slice(0, 10);
+      totalCount += createdMap.get(key) || 0;
+      completedCount += completedMap.get(key) || 0;
+      data.push({
+        date: key,
+        label: formatters.formatDate(cursor, 'D MMM'),
+        total: totalCount,
+        completed: completedCount,
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return {
+      start: formatters.formatDate(startDate, 'D MMM'),
+      end: formatters.formatDate(maxDate, 'D MMM'),
+      data,
+    };
+  };
+
+  const buildUpcomingByAssignee = (tasks) => {
+    const today = normalizeDate(new Date());
+    const futureLimit = new Date(today);
+    futureLimit.setDate(futureLimit.getDate() + 30);
+
+    const buckets = new Map();
+    tasks.forEach(task => {
+      if (task.completed || !task.due_date) {
+        return;
+      }
+      const dueDate = normalizeDate(task.due_date);
+      if (!dueDate || dueDate < today || dueDate > futureLimit) {
+        return;
+      }
+      const assignee = task.assignee;
+      const bucketKey = assignee?.id ? `user-${assignee.id}` : 'unassigned';
+      if (!buckets.has(bucketKey)) {
+        buckets.set(bucketKey, {
+          id: bucketKey,
+          name: assignee?.full_name || 'Unassigned',
+          initials: assignee?.initials || (assignee?.full_name
+            ? assignee.full_name
+                .split(' ')
+                .map(part => part.charAt(0))
+                .join('')
+                .substring(0, 2)
+                .toUpperCase()
+            : 'NA'),
+          color: assignee?.avatar_color || '#c4b5fd',
+          count: 0,
+        });
+      }
+      buckets.get(bucketKey).count += 1;
+    });
+
+    return Array.from(buckets.values()).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  };
+
+  const getDashboardData = async (req, res) => {
+    const { projectId } = req.params;
+    const formatters = getDateFormatters(req);
+
+    try {
+      if (!projectId || Number.isNaN(parseInt(projectId, 10))) {
+        return res.status(400).json(errorResponse('Invalid project ID', 400));
+      }
+
+      const project = await Project.findByPk(projectId, {
+        attributes: ['id', 'name', 'color'],
+      });
+
+      if (!project) {
+        return res.status(404).json(errorResponse('Project not found', 404));
+      }
+
+      const tasks = await Task.findAll({
+        where: { project_id: projectId },
+        include: [
+          {
+            model: Section,
+            as: 'section',
+            attributes: ['id', 'name'],
+            required: false,
+          },
+          {
+            model: User,
+            as: 'assignee',
+            attributes: ['id', 'full_name', 'avatar_color', 'initials'],
+            required: false,
+          },
+        ],
+        order: [
+          ['created_at', 'ASC'],
+        ],
+      });
+
+      const totalTasks = tasks.length;
+      const completedTasks = tasks.filter(task => !!task.completed).length;
+      const incompleteTasks = totalTasks - completedTasks;
+      const today = normalizeDate(new Date());
+      const overdueTasks = tasks.filter(task =>
+        !task.completed &&
+        task.due_date &&
+        normalizeDate(task.due_date) &&
+        normalizeDate(task.due_date) < today
+      ).length;
+
+      const statCards = [
+        {
+          id: 'completed',
+          title: 'Total completed tasks',
+          value: completedTasks,
+          helperText: '1 Filter',
+        },
+        {
+          id: 'incomplete',
+          title: 'Total incomplete tasks',
+          value: incompleteTasks,
+          helperText: '1 Filter',
+        },
+        {
+          id: 'overdue',
+          title: 'Total overdue tasks',
+          value: overdueTasks,
+          helperText: '1 Filter',
+        },
+        {
+          id: 'total',
+          title: 'Total tasks',
+          value: totalTasks,
+          helperText: 'No Filters',
+        },
+      ];
+
+      const incompleteBySectionMap = new Map();
+      tasks.forEach(task => {
+        if (task.completed) {
+          return;
+        }
+        const sectionName = task.section?.name || 'Untitled';
+        incompleteBySectionMap.set(sectionName, (incompleteBySectionMap.get(sectionName) || 0) + 1);
+      });
+
+      const incompleteBySection = Array.from(incompleteBySectionMap.entries())
+        .map(([label, value]) => ({
+          label,
+          value,
+        }))
+        .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+
+      if (!incompleteBySection.length) {
+        incompleteBySection.push({ label: 'To do', value: 0 });
+      }
+
+      const completionStatus = [
+        {
+          label: 'Completed',
+          value: completedTasks,
+          color: '#8b5cf6',
+        },
+        {
+          label: 'Incomplete',
+          value: incompleteTasks,
+          color: '#d8cffd',
+        },
+      ];
+
+      const upcomingByAssignee = buildUpcomingByAssignee(tasks);
+      const completionTrend = buildCompletionTrend(tasks, formatters, 12);
+
+      return res.json(successResponse({
+        project: {
+          id: project.id.toString(),
+          name: project.name,
+          color: project.color || null,
+        },
+        stats: {
+          cards: statCards,
+        },
+        charts: {
+          incompleteBySection: {
+            title: 'Total incomplete tasks by section',
+            filtersLabel: '2 Filters',
+            seeAll: true,
+            data: incompleteBySection,
+          },
+          completionStatus: {
+            title: 'Total tasks by completion status',
+            filtersLabel: '1 Filter',
+            seeAll: true,
+            total: totalTasks,
+            data: completionStatus,
+          },
+          upcomingByAssignee: {
+            title: 'Total upcoming tasks by assignee',
+            filtersLabel: '2 Filters',
+            data: upcomingByAssignee,
+          },
+          completionTrend: {
+            title: 'Task completion over time',
+            filtersLabel: 'No Filters',
+            seeAll: true,
+            data: completionTrend,
+          },
+        },
+      }));
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      return res.status(500).json(errorResponse(`Failed to fetch dashboard data: ${error.message}`, 500));
+    }
+  };
+
+  const determineTimelineBounds = (sections) => {
+    let minDate = null;
+    let maxDate = null;
+
+    sections.forEach(section => {
+      const tasks = Array.isArray(section.tasks) ? section.tasks : [];
+      tasks.forEach(task => {
+        const taskStart = task.start_date || task.startDate || task.due_date || task.created_at;
+        const taskDue = task.due_date || task.dueDate || taskStart;
+
+        if (taskStart) {
+          const startTime = new Date(taskStart);
+          if (!minDate || startTime < minDate) {
+            minDate = startTime;
+          }
+        }
+
+        if (taskDue) {
+          const dueTime = new Date(taskDue);
+          if (!maxDate || dueTime > maxDate) {
+            maxDate = dueTime;
+          }
+        }
+      });
+    });
+
+    const today = new Date();
+    if (!minDate) {
+      minDate = new Date(today);
+      minDate.setDate(minDate.getDate() - 7);
+    }
+
+    if (!maxDate) {
+      maxDate = new Date(today);
+      maxDate.setDate(maxDate.getDate() + 21);
+    }
+
+    // Expand range slightly for context
+    minDate.setHours(0, 0, 0, 0);
+    maxDate.setHours(0, 0, 0, 0);
+    minDate.setDate(minDate.getDate() - 2);
+    maxDate.setDate(maxDate.getDate() + 7);
+
+    return { minDate, maxDate };
+  };
+
+  const buildTimelineDays = (startDate, endDate, formatters) => {
+    const days = [];
+    const cursor = new Date(startDate);
+    const finalDate = new Date(endDate);
+
+    while (cursor <= finalDate) {
+      days.push({
+        date: formatters.formatDateTime(cursor, 'YYYY-MM-DD'),
+        label: formatters.formatDate(cursor, 'MMM D'),
+        weekday: formatters.formatDate(cursor, 'ddd'),
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return days;
+  };
   // Get all projects
   const getProjects = async (req, res) => {
     try {
@@ -297,6 +714,19 @@ const projectController = () => {
         due_date,
         is_archived: false,
       });
+
+      // Create welcome message
+      try {
+        await ProjectMessage.create({
+          project_id: project.id,
+          author_id: created_by,
+          content: 'Welcome to the project! Use this space for updates.',
+          pinned: false,
+        });
+      } catch (msgError) {
+        // Log but don't fail project creation if message creation fails
+        console.warn('Failed to create welcome message:', msgError);
+      }
 
       const projectWithRelations = await Project.findByPk(project.id, {
         include: [
@@ -861,6 +1291,266 @@ const projectController = () => {
     }
   };
 
+  const getTimelineViewData = async (req, res) => {
+    const { projectId } = req.params;
+    const formatters = getDateFormatters(req);
+
+    try {
+      if (!projectId || isNaN(parseInt(projectId, 10))) {
+        return res.status(400).json(errorResponse('Invalid project ID', 400));
+      }
+
+      const project = await Project.findByPk(projectId, {
+        attributes: ['id', 'name', 'color'],
+      });
+
+      if (!project) {
+        return res.status(404).json(errorResponse('Project not found', 404));
+      }
+
+      const sections = await Section.findAll({
+        where: { project_id: projectId },
+        include: [
+          {
+            model: Task,
+            as: 'tasks',
+            include: boardViewTaskIncludes,
+            required: false,
+          },
+        ],
+        order: [
+          ['position', 'ASC'],
+          [{ model: Task, as: 'tasks' }, 'position', 'ASC'],
+          [{ model: Task, as: 'tasks' }, 'updated_at', 'ASC'],
+        ],
+      });
+
+      const { minDate, maxDate } = determineTimelineBounds(sections);
+      const timelineDays = buildTimelineDays(minDate, maxDate, formatters);
+
+      const groups = sections.map((section) => {
+        const formatted = formatBoardViewSection(section, formatters);
+        return {
+          id: formatted?.id || section.id?.toString(),
+          title: formatted?.title || section.name,
+          order: formatted?.order ?? (section.position || 0),
+          taskCount: formatted?.taskCount || (section.tasks?.length || 0),
+          tasks: (section.tasks || [])
+            .map((task) => formatTimelineTask(task, formatters))
+            .filter(Boolean),
+        };
+      });
+
+      return res.json(successResponse({
+        project: {
+          id: project.id.toString(),
+          name: project.name,
+          color: project.color || null,
+        },
+        timeline: {
+          startDate: formatters.formatDateTime(minDate, 'YYYY-MM-DD'),
+          endDate: formatters.formatDateTime(maxDate, 'YYYY-MM-DD'),
+          dayCount: timelineDays.length,
+          days: timelineDays,
+        },
+        groups,
+      }));
+    } catch (error) {
+      console.error('Error fetching timeline view data:', error);
+      return res.status(500).json(errorResponse(`Failed to fetch timeline view data: ${error.message}`, 500));
+    }
+  };
+
+  const updateTimelineViewTask = async (req, res) => {
+    const { taskId } = req.params;
+    const { start_date, due_date, target_section_id: targetSectionIdRaw } = req.body || {};
+
+    try {
+      if (!taskId || isNaN(parseInt(taskId, 10))) {
+        return res.status(400).json(errorResponse('Invalid task ID', 400));
+      }
+
+      const task = await Task.findByPk(taskId);
+      if (!task) {
+        return res.status(404).json(errorResponse('Task not found', 404));
+      }
+
+      const updates = {};
+
+      if (start_date !== undefined) {
+        if (start_date && Number.isNaN(Date.parse(start_date))) {
+          return res.status(400).json(errorResponse('Invalid start date', 400));
+        }
+        updates.start_date = start_date || null;
+      }
+
+      if (due_date !== undefined) {
+        if (due_date && Number.isNaN(Date.parse(due_date))) {
+          return res.status(400).json(errorResponse('Invalid due date', 400));
+        }
+        updates.due_date = due_date || null;
+      }
+
+      if (updates.start_date && updates.due_date && new Date(updates.start_date) > new Date(updates.due_date)) {
+        return res.status(400).json(errorResponse('Start date cannot be after due date', 400));
+      }
+
+      if (targetSectionIdRaw !== undefined && targetSectionIdRaw !== null) {
+        const parsedSectionId = parseInt(targetSectionIdRaw, 10);
+        if (Number.isNaN(parsedSectionId)) {
+          return res.status(400).json(errorResponse('Invalid section ID', 400));
+        }
+        const section = await Section.findOne({
+          where: { id: parsedSectionId, project_id: task.project_id },
+        });
+        if (!section) {
+          return res.status(404).json(errorResponse('Section not found in this project', 404));
+        }
+        updates.section_id = parsedSectionId;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json(errorResponse('No valid fields provided to update', 400));
+      }
+
+      await task.update(updates);
+
+      const updatedTask = await Task.findByPk(taskId, {
+        include: boardViewTaskIncludes,
+      });
+
+      return res.json(successResponse({
+        task: formatTimelineTask(updatedTask, getDateFormatters(req)),
+      }, 'Timeline task updated successfully'));
+    } catch (error) {
+      console.error('Error updating timeline view task:', error);
+      return res.status(500).json(errorResponse(`Failed to update timeline view task: ${error.message}`, 500));
+    }
+  };
+
+  const getCalendarViewData = async (req, res) => {
+    const { projectId } = req.params;
+    const formatters = getDateFormatters(req);
+
+    try {
+      if (!projectId || isNaN(parseInt(projectId, 10))) {
+        return res.status(400).json(errorResponse('Invalid project ID', 400));
+      }
+
+      const project = await Project.findByPk(projectId, {
+        attributes: ['id', 'name', 'color'],
+      });
+
+      if (!project) {
+        return res.status(404).json(errorResponse('Project not found', 404));
+      }
+
+      const tasks = await Task.findAll({
+        where: { project_id: projectId },
+        include: [
+          {
+            model: User,
+            as: 'assignee',
+            attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'],
+            required: false,
+          },
+          {
+            model: Project,
+            as: 'project',
+            attributes: ['id', 'name', 'color'],
+            required: false,
+          },
+        ],
+        order: [
+          ['due_date', 'ASC'],
+          ['start_date', 'ASC'],
+          ['updated_at', 'DESC'],
+        ],
+      });
+
+      const calendarTasks = tasks
+        .map(task => formatCalendarTask(task, formatters, project))
+        .filter(Boolean);
+
+      return res.json(successResponse({
+        project: {
+          id: project.id.toString(),
+          name: project.name,
+          color: project.color || null,
+        },
+        tasks: calendarTasks,
+      }));
+    } catch (error) {
+      console.error('Error fetching calendar view data:', error);
+      return res.status(500).json(errorResponse(`Failed to fetch calendar data: ${error.message}`, 500));
+    }
+  };
+
+  const updateCalendarTask = async (req, res) => {
+    const { taskId } = req.params;
+    const { startDate, dueDate } = req.body || {};
+
+    try {
+      if (!taskId || isNaN(parseInt(taskId, 10))) {
+        return res.status(400).json(errorResponse('Invalid task ID', 400));
+      }
+
+      const task = await Task.findByPk(taskId);
+      if (!task) {
+        return res.status(404).json(errorResponse('Task not found', 404));
+      }
+
+      const updates = {};
+
+      if (startDate !== undefined) {
+        if (startDate && Number.isNaN(Date.parse(startDate))) {
+          return res.status(400).json(errorResponse('Invalid start date', 400));
+        }
+        updates.start_date = startDate || null;
+      }
+
+      if (dueDate !== undefined) {
+        if (dueDate && Number.isNaN(Date.parse(dueDate))) {
+          return res.status(400).json(errorResponse('Invalid due date', 400));
+        }
+        updates.due_date = dueDate || null;
+      }
+
+      const startValue = updates.start_date ?? task.start_date ?? updates.due_date ?? task.due_date;
+      const endValue = updates.due_date ?? task.due_date ?? updates.start_date ?? task.start_date;
+
+      if (startValue && endValue && new Date(startValue) > new Date(endValue)) {
+        return res.status(400).json(errorResponse('Start date cannot be after due date', 400));
+      }
+
+      await task.update(updates);
+
+      const updatedTask = await Task.findByPk(taskId, {
+        include: [
+          {
+            model: User,
+            as: 'assignee',
+            attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'],
+            required: false,
+          },
+          {
+            model: Project,
+            as: 'project',
+            attributes: ['id', 'name', 'color'],
+            required: false,
+          },
+        ],
+      });
+
+      return res.json(successResponse({
+        task: formatCalendarTask(updatedTask, getDateFormatters(req), updatedTask?.project),
+      }, 'Calendar task updated successfully'));
+    } catch (error) {
+      console.error('Error updating calendar task:', error);
+      return res.status(500).json(errorResponse(`Failed to update calendar task: ${error.message}`, 500));
+    }
+  };
+
   // Get project overview data
   const getProjectOverview = async (req, res) => {
     const { projectId } = req.params;
@@ -1089,6 +1779,266 @@ const projectController = () => {
     }
   };
 
+  // Create a new project message
+  const createMessage = async (req, res) => {
+    const { projectId } = req.params;
+    const { content } = req.body;
+    const authorId = req.user.id;
+
+    try {
+      if (!projectId || isNaN(parseInt(projectId, 10))) {
+        return res.status(400).json(errorResponse('Invalid project ID', 400));
+      }
+
+      if (!content || !content.trim()) {
+        return res.status(400).json(errorResponse('Message content is required', 400));
+      }
+
+      // Check if project exists
+      const project = await Project.findByPk(projectId);
+      if (!project) {
+        return res.status(404).json(errorResponse('Project not found', 404));
+      }
+
+      // Check if user is a project member
+      const isMember = await ProjectMember.findOne({
+        where: { project_id: projectId, user_id: authorId },
+      });
+
+      if (!isMember && project.created_by !== authorId) {
+        return res.status(403).json(errorResponse('Only project members can post messages', 403));
+      }
+
+      const message = await ProjectMessage.create({
+        project_id: parseInt(projectId, 10),
+        author_id: authorId,
+        content: content.trim(),
+        pinned: false,
+      });
+
+      const messageWithAuthor = await ProjectMessage.findByPk(message.id, {
+        include: [
+          {
+            model: User,
+            as: 'author',
+            attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'],
+          },
+        ],
+      });
+
+      const formatted = formatProjectMessage(messageWithAuthor);
+
+      res.status(201).json(successResponse({ message: formatted }, 'Message created successfully'));
+    } catch (error) {
+      console.error('Error creating message:', error);
+      res.status(500).json(errorResponse(`Failed to create message: ${error.message}`, 500));
+    }
+  };
+
+  // Get project messages (paginated)
+  const getMessages = async (req, res) => {
+    const { projectId } = req.params;
+    const { page = 1, limit = 50 } = req.query;
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
+    const offset = (pageNum - 1) * limitNum;
+
+    try {
+      if (!projectId || isNaN(parseInt(projectId, 10))) {
+        return res.status(400).json(errorResponse('Invalid project ID', 400));
+      }
+
+      // Check if project exists
+      const project = await Project.findByPk(projectId);
+      if (!project) {
+        return res.status(404).json(errorResponse('Project not found', 404));
+      }
+
+      const { count, rows } = await ProjectMessage.findAndCountAll({
+        where: { project_id: projectId },
+        include: [
+          {
+            model: User,
+            as: 'author',
+            attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'],
+          },
+        ],
+        order: [
+          ['pinned', 'DESC'],
+          ['created_at', 'DESC'],
+        ],
+        limit: limitNum,
+        offset,
+      });
+
+      const messages = rows.map(msg => formatProjectMessage(msg));
+
+      res.json(successResponse({
+        messages,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: count,
+          totalPages: Math.ceil(count / limitNum),
+        },
+      }));
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      res.status(500).json(errorResponse(`Failed to fetch messages: ${error.message}`, 500));
+    }
+  };
+
+  // Update a project message
+  const updateMessage = async (req, res) => {
+    const { messageId } = req.params;
+    const { content } = req.body;
+    const userId = req.user.id;
+
+    try {
+      if (!messageId || isNaN(parseInt(messageId, 10))) {
+        return res.status(400).json(errorResponse('Invalid message ID', 400));
+      }
+
+      if (!content || !content.trim()) {
+        return res.status(400).json(errorResponse('Message content is required', 400));
+      }
+
+      const message = await ProjectMessage.findByPk(messageId);
+      if (!message) {
+        return res.status(404).json(errorResponse('Message not found', 404));
+      }
+
+      // Check if user is author or project admin
+      const project = await Project.findByPk(message.project_id);
+      const isAuthor = message.author_id === userId;
+      const isAdmin = project?.created_by === userId;
+
+      if (!isAuthor && !isAdmin) {
+        return res.status(403).json(errorResponse('Only the author or project admin can edit messages', 403));
+      }
+
+      await message.update({ content: content.trim() });
+
+      const updatedMessage = await ProjectMessage.findByPk(messageId, {
+        include: [
+          {
+            model: User,
+            as: 'author',
+            attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'],
+          },
+        ],
+      });
+
+      res.json(successResponse({ message: formatProjectMessage(updatedMessage) }, 'Message updated successfully'));
+    } catch (error) {
+      console.error('Error updating message:', error);
+      res.status(500).json(errorResponse(`Failed to update message: ${error.message}`, 500));
+    }
+  };
+
+  // Pin/unpin a project message
+  const pinMessage = async (req, res) => {
+    const { messageId } = req.params;
+    const userId = req.user.id;
+
+    try {
+      if (!messageId || isNaN(parseInt(messageId, 10))) {
+        return res.status(400).json(errorResponse('Invalid message ID', 400));
+      }
+
+      const message = await ProjectMessage.findByPk(messageId);
+      if (!message) {
+        return res.status(404).json(errorResponse('Message not found', 404));
+      }
+
+      // Check if user is project admin
+      const project = await Project.findByPk(message.project_id);
+      const isAdmin = project?.created_by === userId;
+
+      if (!isAdmin) {
+        return res.status(403).json(errorResponse('Only project admin can pin messages', 403));
+      }
+
+      await message.update({ pinned: !message.pinned });
+
+      const updatedMessage = await ProjectMessage.findByPk(messageId, {
+        include: [
+          {
+            model: User,
+            as: 'author',
+            attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'],
+          },
+        ],
+      });
+
+      res.json(successResponse({ message: formatProjectMessage(updatedMessage) }, 'Message pin status updated'));
+    } catch (error) {
+      console.error('Error pinning message:', error);
+      res.status(500).json(errorResponse(`Failed to pin message: ${error.message}`, 500));
+    }
+  };
+
+  // Delete a project message (soft delete)
+  const deleteMessage = async (req, res) => {
+    const { messageId } = req.params;
+    const userId = req.user.id;
+
+    try {
+      if (!messageId || isNaN(parseInt(messageId, 10))) {
+        return res.status(400).json(errorResponse('Invalid message ID', 400));
+      }
+
+      const message = await ProjectMessage.findByPk(messageId);
+      if (!message) {
+        return res.status(404).json(errorResponse('Message not found', 404));
+      }
+
+      // Check if user is author or project admin
+      const project = await Project.findByPk(message.project_id);
+      const isAuthor = message.author_id === userId;
+      const isAdmin = project?.created_by === userId;
+
+      if (!isAuthor && !isAdmin) {
+        return res.status(403).json(errorResponse('Only the author or project admin can delete messages', 403));
+      }
+
+      await message.destroy();
+
+      res.json(successResponse(null, 'Message deleted successfully'));
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      res.status(500).json(errorResponse(`Failed to delete message: ${error.message}`, 500));
+    }
+  };
+
+  // Helper to format project message for response
+  const formatProjectMessage = (message) => {
+    if (!message) {
+      return null;
+    }
+
+    const plain = message.toJSON ? message.toJSON() : message;
+    const author = plain.author || null;
+
+    return {
+      id: plain.id?.toString(),
+      content: plain.content,
+      pinned: !!plain.pinned,
+      createdAt: plain.created_at || plain.createdAt,
+      updatedAt: plain.updated_at || plain.updatedAt,
+      author: author
+        ? {
+            id: author.id?.toString(),
+            fullName: author.full_name,
+            email: author.email,
+            avatarUrl: author.avatar_url || null,
+            avatarColor: author.avatar_color || null,
+            initials: author.initials || null,
+          }
+        : null,
+    };
+  };
+
   return {
     getProjects,
     getProjectById,
@@ -1103,8 +2053,18 @@ const projectController = () => {
     updateBoardViewTask,
     createBoardViewSection,
     updateBoardViewSection,
+    getCalendarViewData,
+    updateCalendarTask,
+    getDashboardData,
+    getTimelineViewData,
+    updateTimelineViewTask,
     getProjectOverview,
     updateProjectOverview,
+    createMessage,
+    getMessages,
+    updateMessage,
+    pinMessage,
+    deleteMessage,
   };
 };
 module.exports = projectController;

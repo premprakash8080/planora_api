@@ -251,6 +251,8 @@ const initiatePreData = async () => {
               : null,
             completed: taskData.completed || false,
             position: taskData.position || 0,
+            start_date: taskData.start_date || taskData.due_date || null,
+            due_date: taskData.due_date || null,
           }))
         );
 

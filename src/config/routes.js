@@ -40,6 +40,11 @@ exports.set_routes = (app) => {
 
   // Board View Routes (all protected)
   const boardView = require("../routes/boardView");
+  // Timeline View Routes (all protected)
+  const timelineView = require("../routes/timelineView");
+  
+  // Project Messages Routes (all protected)
+  const projectMessages = require("../routes/projectMessages");
   
   // API Routes
   app.use("/api/users", users);
@@ -56,4 +61,6 @@ exports.set_routes = (app) => {
   app.use("/api/task-statuses", taskStatuses);
   app.use("/api/priority-labels", priorityLabels);
   app.use("/api/board-view", boardView);
+  app.use("/api/timeline-view", timelineView);
+  app.use("/api/project-messages", projectMessages);
 };

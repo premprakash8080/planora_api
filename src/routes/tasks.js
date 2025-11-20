@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const taskController = require('../controllers/taskController');
+const projectController = require('../controllers/projectController');
 const { authenticate } = require('../middleware/auth');
 
 const { getTasksByProject, getTaskById, createTask, updateTask, deleteTask, toggleTaskCompletion, batchUpdateTasks } = taskController();
+const { updateCalendarTask } = projectController();
 
 // All routes require authentication
 router.use(authenticate);
@@ -19,6 +21,7 @@ router.put('/updatetask', updateTask);
 router.put('/updatetaskbyid/:taskId', updateTask);
 router.delete('/deletetaskbyid/:taskId', deleteTask); // deleteTask supports both req.body and req.params
 router.patch('/:taskId/toggle-completion', toggleTaskCompletion);
+router.patch('/:taskId/updateCalendarTask', updateCalendarTask);
 router.post('/batchupdatetask', batchUpdateTasks);
 
 module.exports = router;
