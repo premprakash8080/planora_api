@@ -1,4 +1,4 @@
-const { Task, Project, User, ProjectMember, TaskActivityLog } = require('../models');
+const { Task, Project, User, ProjectMember, TaskActivityLog, TaskStatus } = require('../models');
 const { Op, Sequelize } = require('sequelize');
 const { successResponse, errorResponse } = require('../utils/responseFormatter');
 
@@ -36,32 +36,44 @@ const insightsController = () => {
       const todayEnd = new Date(today);
       todayEnd.setHours(23, 59, 59, 999);
 
-      const tasksCompletedToday = await Task.count({
-        where: {
-          assigned_to: userId,
-          status: 'Done',
-          completed: true,
-          updated_at: {
-            [Op.between]: [today, todayEnd]
-          },
-          deleted_at: null
-        }
+      // Find TaskStatus ID for "Done"
+      const doneStatus = await TaskStatus.findOne({
+        where: { name: 'Done', is_active: true }
       });
+      const doneStatusId = doneStatus ? doneStatus.id : null;
+
+      let tasksCompletedToday = 0;
+      if (doneStatusId) {
+        tasksCompletedToday = await Task.count({
+          where: {
+            assigned_to: userId,
+            task_status_id: doneStatusId,
+            completed: true,
+            updated_at: {
+              [Op.between]: [today, todayEnd]
+            },
+            deleted_at: null
+          }
+        });
+      }
 
       // Average completion time (in hours) - approximate based on created_at to updated_at
-      const completedTasksForAvg = await Task.findAll({
-        where: {
-          assigned_to: userId,
-          status: 'Done',
-          completed: true,
-          updated_at: {
-            [Op.gte]: startDate
+      let completedTasksForAvg = [];
+      if (doneStatusId) {
+        completedTasksForAvg = await Task.findAll({
+          where: {
+            assigned_to: userId,
+            task_status_id: doneStatusId,
+            completed: true,
+            updated_at: {
+              [Op.gte]: startDate
+            },
+            deleted_at: null
           },
-          deleted_at: null
-        },
-        attributes: ['id', 'created_at', 'updated_at'],
-        raw: false
-      });
+          attributes: ['id', 'created_at', 'updated_at'],
+          raw: false
+        });
+      }
 
       let avgCompletionTime = 0;
       if (completedTasksForAvg.length > 0) {
@@ -83,15 +95,18 @@ const insightsController = () => {
         }
       });
 
-      const tasksCompleted = await Task.count({
-        where: {
-          assigned_to: userId,
-          status: 'Done',
-          completed: true,
-          updated_at: { [Op.gte]: startDate },
-          deleted_at: null
-        }
-      });
+      let tasksCompleted = 0;
+      if (doneStatusId) {
+        tasksCompleted = await Task.count({
+          where: {
+            assigned_to: userId,
+            task_status_id: doneStatusId,
+            completed: true,
+            updated_at: { [Op.gte]: startDate },
+            deleted_at: null
+          }
+        });
+      }
 
       const productivityScore = tasksAssigned > 0 ? Math.round((tasksCompleted / tasksAssigned) * 100) : 0;
 
@@ -109,17 +124,20 @@ const insightsController = () => {
         prevStartDate.setMonth(prevStartDate.getMonth() - 3);
       }
 
-      const prevTasksCompleted = await Task.count({
-        where: {
-          assigned_to: userId,
-          status: 'Done',
-          completed: true,
-          updated_at: {
-            [Op.between]: [prevStartDate, prevEndDate]
-          },
-          deleted_at: null
-        }
-      });
+      let prevTasksCompleted = 0;
+      if (doneStatusId) {
+        prevTasksCompleted = await Task.count({
+          where: {
+            assigned_to: userId,
+            task_status_id: doneStatusId,
+            completed: true,
+            updated_at: {
+              [Op.between]: [prevStartDate, prevEndDate]
+            },
+            deleted_at: null
+          }
+        });
+      }
 
       const tasksChange = prevTasksCompleted > 0 
         ? Math.round(((tasksCompletedToday - prevTasksCompleted) / prevTasksCompleted) * 100)
@@ -183,6 +201,12 @@ const insightsController = () => {
       const userId = req.user.id;
       const { period = 'week' } = req.query;
 
+      // Find TaskStatus ID for "Done" (once outside the loop for efficiency)
+      const doneStatus = await TaskStatus.findOne({
+        where: { name: 'Done', is_active: true }
+      });
+      const doneStatusId = doneStatus ? doneStatus.id : null;
+
       // Get last 7 days
       const trends = [];
       const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -195,17 +219,20 @@ const insightsController = () => {
         const dayEnd = new Date(date);
         dayEnd.setHours(23, 59, 59, 999);
 
-        const tasksCompleted = await Task.count({
-          where: {
-            assigned_to: userId,
-            status: 'Done',
-            completed: true,
-            updated_at: {
-              [Op.between]: [dayStart, dayEnd]
-            },
-            deleted_at: null
-          }
-        });
+        let tasksCompleted = 0;
+        if (doneStatusId) {
+          tasksCompleted = await Task.count({
+            where: {
+              assigned_to: userId,
+              task_status_id: doneStatusId,
+              completed: true,
+              updated_at: {
+                [Op.between]: [dayStart, dayEnd]
+              },
+              deleted_at: null
+            }
+          });
+        }
 
         // Approximate hours worked (based on tasks completed)
         const hoursWorked = tasksCompleted * 0.5; // Rough estimate
@@ -260,36 +287,55 @@ const insightsController = () => {
         }
       });
 
-      // Completed tasks
-      const completedTasks = await Task.count({
-        where: {
-          project_id: { [Op.in]: projectIds },
-          status: 'Done',
-          completed: true,
-          deleted_at: null
-        }
+      // Find TaskStatus IDs
+      const doneStatus = await TaskStatus.findOne({
+        where: { name: 'Done', is_active: true }
       });
+      const inProgressStatus = await TaskStatus.findOne({
+        where: { name: 'In Progress', is_active: true }
+      });
+      const doneStatusId = doneStatus ? doneStatus.id : null;
+      const inProgressStatusId = inProgressStatus ? inProgressStatus.id : null;
+
+      // Completed tasks
+      let completedTasks = 0;
+      if (doneStatusId) {
+        completedTasks = await Task.count({
+          where: {
+            project_id: { [Op.in]: projectIds },
+            task_status_id: doneStatusId,
+            completed: true,
+            deleted_at: null
+          }
+        });
+      }
 
       // In progress tasks
-      const inProgressTasks = await Task.count({
-        where: {
-          project_id: { [Op.in]: projectIds },
-          status: 'In Progress',
-          deleted_at: null
-        }
-      });
+      let inProgressTasks = 0;
+      if (inProgressStatusId) {
+        inProgressTasks = await Task.count({
+          where: {
+            project_id: { [Op.in]: projectIds },
+            task_status_id: inProgressStatusId,
+            deleted_at: null
+          }
+        });
+      }
 
       // Overdue tasks
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const overdueTasks = await Task.count({
-        where: {
-          project_id: { [Op.in]: projectIds },
-          status: { [Op.ne]: 'Done' },
-          due_date: { [Op.lt]: today },
-          deleted_at: null
-        }
-      });
+      let overdueTasks = 0;
+      if (doneStatusId) {
+        overdueTasks = await Task.count({
+          where: {
+            project_id: { [Op.in]: projectIds },
+            task_status_id: { [Op.ne]: doneStatusId },
+            due_date: { [Op.lt]: today },
+            deleted_at: null
+          }
+        });
+      }
 
       // Calculate changes (compare with previous period)
       const thirtyDaysAgo = new Date();
@@ -303,15 +349,18 @@ const insightsController = () => {
         }
       });
 
-      const prevCompletedTasks = await Task.count({
-        where: {
-          project_id: { [Op.in]: projectIds },
-          status: 'Done',
-          completed: true,
-          updated_at: { [Op.lt]: thirtyDaysAgo },
-          deleted_at: null
-        }
-      });
+      let prevCompletedTasks = 0;
+      if (doneStatusId) {
+        prevCompletedTasks = await Task.count({
+          where: {
+            project_id: { [Op.in]: projectIds },
+            task_status_id: doneStatusId,
+            completed: true,
+            updated_at: { [Op.lt]: thirtyDaysAgo },
+            deleted_at: null
+          }
+        });
+      }
 
       const totalChange = prevTotalTasks > 0 
         ? Math.round(((totalTasks - prevTotalTasks) / prevTotalTasks) * 100)
@@ -391,14 +440,21 @@ const insightsController = () => {
         return res.json(successResponse({ analytics: [] }));
       }
 
-      const statuses = ['To Do', 'In Progress', 'Done', 'On Track', 'At Risk', 'Off Track'];
+      const statusNames = ['To Do', 'In Progress', 'Done', 'On Track', 'At Risk', 'Off Track'];
       const analytics = [];
 
-      for (const status of statuses) {
+      for (const statusName of statusNames) {
+        // Find TaskStatus by name
+        const taskStatus = await TaskStatus.findOne({
+          where: { name: statusName, is_active: true }
+        });
+
+        if (!taskStatus) continue;
+
         const count = await Task.count({
           where: {
             project_id: { [Op.in]: projectIds },
-            status,
+            task_status_id: taskStatus.id,
             deleted_at: null
           }
         });
@@ -415,10 +471,10 @@ const insightsController = () => {
           };
 
           analytics.push({
-            status,
+            status: statusName,
             count,
             percentage,
-            color: colorMap[status] || '#9e9e9e'
+            color: colorMap[statusName] || '#9e9e9e'
           });
         }
       }
@@ -462,14 +518,23 @@ const insightsController = () => {
           }
         });
 
-        const completed = await Task.count({
-          where: {
-            project_id: project.id,
-            status: 'Done',
-            completed: true,
-            deleted_at: null
-          }
+        // Find TaskStatus ID for "Done"
+        const doneStatus = await TaskStatus.findOne({
+          where: { name: 'Done', is_active: true }
         });
+        const doneStatusId = doneStatus ? doneStatus.id : null;
+
+        let completed = 0;
+        if (doneStatusId) {
+          completed = await Task.count({
+            where: {
+              project_id: project.id,
+              task_status_id: doneStatusId,
+              completed: true,
+              deleted_at: null
+            }
+          });
+        }
 
         const completionRate = totalTasks > 0 
           ? Math.round((completed / totalTasks) * 100 * 10) / 10
@@ -538,14 +603,23 @@ const insightsController = () => {
         }
       });
 
-      const completedTasks = await Task.count({
-        where: {
-          project_id: { [Op.in]: projectIds },
-          status: 'Done',
-          completed: true,
-          deleted_at: null
-        }
+      // Find TaskStatus ID for "Done"
+      const doneStatus = await TaskStatus.findOne({
+        where: { name: 'Done', is_active: true }
       });
+      const doneStatusId = doneStatus ? doneStatus.id : null;
+
+      let completedTasks = 0;
+      if (doneStatusId) {
+        completedTasks = await Task.count({
+          where: {
+            project_id: { [Op.in]: projectIds },
+            task_status_id: doneStatusId,
+            completed: true,
+            deleted_at: null
+          }
+        });
+      }
 
       const teamProductivity = allTasks > 0 
         ? Math.round((completedTasks / allTasks) * 100)
@@ -655,15 +729,24 @@ const insightsController = () => {
           }
         });
 
-        const tasksCompleted = await Task.count({
-          where: {
-            assigned_to: memberId,
-            project_id: { [Op.in]: projectIds },
-            status: 'Done',
-            completed: true,
-            deleted_at: null
-          }
+        // Find TaskStatus ID for "Done"
+        const doneStatus = await TaskStatus.findOne({
+          where: { name: 'Done', is_active: true }
         });
+        const doneStatusId = doneStatus ? doneStatus.id : null;
+
+        let tasksCompleted = 0;
+        if (doneStatusId) {
+          tasksCompleted = await Task.count({
+            where: {
+              assigned_to: memberId,
+              project_id: { [Op.in]: projectIds },
+              task_status_id: doneStatusId,
+              completed: true,
+              deleted_at: null
+            }
+          });
+        }
 
         const completionRate = tasksAssigned > 0
           ? Math.round((tasksCompleted / tasksAssigned) * 100 * 10) / 10
@@ -733,16 +816,24 @@ const insightsController = () => {
       });
       const projectIds = userProjects.map(pm => pm.project_id);
 
+      // Find TaskStatus ID for "Done"
+      const doneStatus = await TaskStatus.findOne({
+        where: { name: 'Done', is_active: true }
+      });
+      const doneStatusId = doneStatus ? doneStatus.id : null;
+
       // Approximate time based on tasks completed - get all tasks and group manually
-      const completedTasks = await Task.findAll({
-        where: {
-          assigned_to: userId,
-          project_id: { [Op.in]: projectIds },
-          status: 'Done',
-          completed: true,
-          updated_at: { [Op.gte]: startDate },
-          deleted_at: null
-        },
+      let completedTasks = [];
+      if (doneStatusId) {
+        completedTasks = await Task.findAll({
+          where: {
+            assigned_to: userId,
+            project_id: { [Op.in]: projectIds },
+            task_status_id: doneStatusId,
+            completed: true,
+            updated_at: { [Op.gte]: startDate },
+            deleted_at: null
+          },
         include: [
           {
             model: Project,
@@ -752,7 +843,8 @@ const insightsController = () => {
           }
         ],
         raw: false
-      });
+        });
+      }
 
       // Group by project
       const projectMap = new Map();
@@ -830,6 +922,12 @@ const insightsController = () => {
     try {
       const userId = req.user.id;
 
+      // Find TaskStatus ID for "Done" (once outside the loop for efficiency)
+      const doneStatus = await TaskStatus.findOne({
+        where: { name: 'Done', is_active: true }
+      });
+      const doneStatusId = doneStatus ? doneStatus.id : null;
+
       const breakdown = [];
       const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -841,17 +939,20 @@ const insightsController = () => {
         const dayEnd = new Date(date);
         dayEnd.setHours(23, 59, 59, 999);
 
-        const tasksCompleted = await Task.count({
-          where: {
-            assigned_to: userId,
-            status: 'Done',
-            completed: true,
-            updated_at: {
-              [Op.between]: [dayStart, dayEnd]
-            },
-            deleted_at: null
-          }
-        });
+        let tasksCompleted = 0;
+        if (doneStatusId) {
+          tasksCompleted = await Task.count({
+            where: {
+              assigned_to: userId,
+              task_status_id: doneStatusId,
+              completed: true,
+              updated_at: {
+                [Op.between]: [dayStart, dayEnd]
+              },
+              deleted_at: null
+            }
+          });
+        }
 
         // Approximate hours (0.5 hours per task)
         const hours = tasksCompleted * 0.5;
@@ -881,13 +982,21 @@ const insightsController = () => {
       const userId = req.user.id;
       const { limit = 50 } = req.query;
 
-      const tasks = await Task.findAll({
-        where: {
-          assigned_to: userId,
-          status: 'Done',
-          completed: true,
-          deleted_at: null
-        },
+      // Find TaskStatus ID for "Done"
+      const doneStatus = await TaskStatus.findOne({
+        where: { name: 'Done', is_active: true }
+      });
+      const doneStatusId = doneStatus ? doneStatus.id : null;
+
+      let tasks = [];
+      if (doneStatusId) {
+        tasks = await Task.findAll({
+          where: {
+            assigned_to: userId,
+            task_status_id: doneStatusId,
+            completed: true,
+            deleted_at: null
+          },
         include: [
           {
             model: Project,
@@ -897,7 +1006,8 @@ const insightsController = () => {
         ],
         order: [['updated_at', 'DESC']],
         limit: parseInt(limit)
-      });
+        });
+      }
 
       const entries = tasks.map(task => {
         const created = new Date(task.created_at);
