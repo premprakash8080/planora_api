@@ -4,7 +4,7 @@ const taskController = require('../controllers/taskController');
 const projectController = require('../controllers/projectController');
 const { authenticate } = require('../middleware/auth');
 
-const { getTasksByProject, getTaskById, createTask, updateTask, deleteTask, toggleTaskCompletion, batchUpdateTasks } = taskController();
+const { getTasksByProject, getTaskById, createTask, updateTask, deleteTask, toggleTaskCompletion, batchUpdateTasks, reorderTasksInSection, moveTaskToSection, moveTask } = taskController();
 const { updateCalendarTask } = projectController();
 
 // All routes require authentication
@@ -23,6 +23,9 @@ router.delete('/deletetaskbyid/:taskId', deleteTask); // deleteTask supports bot
 router.patch('/:taskId/toggle-completion', toggleTaskCompletion);
 router.patch('/:taskId/updateCalendarTask', updateCalendarTask);
 router.post('/batchupdatetask', batchUpdateTasks);
+router.post('/reorder-tasks', reorderTasksInSection);
+router.post('/move-task', moveTaskToSection);
+router.patch('/move', moveTask);
 
 module.exports = router;
 

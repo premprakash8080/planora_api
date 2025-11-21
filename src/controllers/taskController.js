@@ -75,7 +75,7 @@ const taskController = () => {
 
   // Create new task
   const createTask = async (req, res) => {
-    const { project_id, section_id, title, description, assigned_to, priority_label_id, task_status_id, due_date, position } = req.body;
+    const { project_id, section_id, title, description, assigned_to, priority_label_id, task_status_id, start_date, due_date, position } = req.body;
     const created_by = req.user.id;
 
     try {
@@ -105,6 +105,19 @@ const taskController = () => {
         }
       }
 
+      // Auto-assign position if not provided
+      let taskPosition = position;
+      if (taskPosition === undefined || taskPosition === null) {
+        // Get the next position for the section
+        taskPosition = await Task.getNextPosition(section_id);
+      } else {
+        // Validate position is a valid number
+        taskPosition = parseFloat(taskPosition);
+        if (isNaN(taskPosition)) {
+          taskPosition = await Task.getNextPosition(section_id);
+        }
+      }
+
       const task = await Task.create({
         project_id,
         section_id,
@@ -114,8 +127,9 @@ const taskController = () => {
         assigned_to: assigned_to || null,
         priority_label_id: priority_label_id ? parseInt(priority_label_id) : null,
         task_status_id: task_status_id ? parseInt(task_status_id) : null,
+        start_date: start_date || null,
         due_date: due_date || null,
-        position: position || 0,
+        position: taskPosition,
         completed: false,
         // Note: parent_id removed - column doesn't exist in database
       }, {
@@ -162,7 +176,7 @@ const taskController = () => {
       // Only copy fields that are explicitly provided (not undefined)
       // This ensures we don't accidentally update fields that weren't meant to be changed
       const allowedFields = [
-        'title', 'description', 'assigned_to', 'due_date', 'completed',
+        'title', 'description', 'assigned_to', 'start_date', 'due_date', 'completed',
         'priority_label_id', 'task_status_id', 'section_id', 'position'
       ];
       
@@ -204,6 +218,15 @@ const taskController = () => {
           }
           updateData.task_status_id = parsed;
         }
+      }
+
+      // Validate position if provided (must be a valid decimal number)
+      if (updateData.position !== undefined) {
+        const parsed = parseFloat(updateData.position);
+        if (isNaN(parsed)) {
+          return res.status(400).json(errorResponse('Invalid position value', 400));
+        }
+        updateData.position = parsed;
       }
 
       const task = await Task.findByPk(taskId);
@@ -329,6 +352,337 @@ const taskController = () => {
     }
   };
 
+  // Reorder tasks in a section (for drag-and-drop within same section)
+  const reorderTasksInSection = async (req, res) => {
+    try {
+      const { section_id, task_positions } = req.body; // Array of { task_id, position }
+
+      if (!section_id || isNaN(parseInt(section_id))) {
+        return res.status(400).json(errorResponse('Missing or invalid section_id', 400));
+      }
+
+      if (!Array.isArray(task_positions) || task_positions.length === 0) {
+        return res.status(400).json(errorResponse('Invalid task_positions array', 400));
+      }
+
+      // Calculate decimal positions for proper ordering
+      // If positions are provided, use them; otherwise calculate based on order
+      const positions = task_positions.map((item, index) => {
+        if (item.position !== undefined && item.position !== null) {
+          return parseFloat(item.position);
+        }
+        // Default: assign sequential positions starting from 1.0
+        return (index + 1) * 1.0;
+      });
+
+      // Update positions for all tasks in the section
+      const updatePromises = task_positions.map(async ({ task_id }, index) => {
+        const task = await Task.findByPk(task_id);
+        if (task && task.section_id === parseInt(section_id)) {
+          const newPosition = positions[index];
+          await task.update({ position: newPosition }, {
+            userId: req.user?.id
+          });
+          return { task_id, success: true, position: newPosition };
+        }
+        return { task_id, success: false, error: 'Task not found or not in section' };
+      });
+
+      const results = await Promise.all(updatePromises);
+
+      res.json(successResponse({ results }, 'Tasks reordered successfully'));
+    } catch (error) {
+      console.error('Error reordering tasks:', error);
+      res.status(500).json(errorResponse('Failed to reorder tasks', 500));
+    }
+  };
+
+  // Move task to different section (for drag-and-drop between sections)
+  const moveTaskToSection = async (req, res) => {
+    try {
+      const { task_id, new_section_id, position } = req.body;
+
+      if (!task_id || isNaN(parseInt(task_id))) {
+        return res.status(400).json(errorResponse('Missing or invalid task_id', 400));
+      }
+
+      if (!new_section_id || isNaN(parseInt(new_section_id))) {
+        return res.status(400).json(errorResponse('Missing or invalid new_section_id', 400));
+      }
+
+      const task = await Task.findByPk(task_id);
+      if (!task) {
+        return res.status(404).json(errorResponse('Task not found', 404));
+      }
+
+      // Calculate position based on before/after task or provided position
+      let newPosition;
+      if (position !== undefined && position !== null) {
+        newPosition = parseFloat(position);
+      } else {
+        // Default: add to end of section
+        newPosition = await Task.getNextPosition(parseInt(new_section_id));
+      }
+
+      // Update task section and position
+      // All other properties (title, description, assigned_to, priority_label_id, 
+      // task_status_id, start_date, due_date, completed) are preserved
+      await task.update({
+        section_id: parseInt(new_section_id),
+        position: newPosition
+      }, {
+        userId: req.user?.id
+      });
+
+      // If task was moved from another section, we may want to reorder tasks in the old section
+      // This is optional - you can add logic here if needed
+
+      const updatedTask = await Task.findByPk(task_id, {
+        include: [
+          { model: Section, as: 'section' },
+          { model: User, as: 'assignee', attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'], required: false },
+          { model: TaskStatus, as: 'taskStatus', required: false },
+          { model: PriorityLabel, as: 'priorityLabel', required: false },
+        ],
+      });
+
+      res.json(successResponse({ task: updatedTask }, 'Task moved successfully'));
+    } catch (error) {
+      console.error('Error moving task:', error);
+      res.status(500).json(errorResponse('Failed to move task', 500));
+    }
+  };
+
+  // Move task with before/after task support (Asana-style drag & drop)
+  const moveTask = async (req, res) => {
+    try {
+      // Get taskId and other parameters from request body only
+      const { taskId, sectionId, beforeTaskId, afterTaskId } = req.body;
+
+      if (!taskId || isNaN(parseInt(taskId))) {
+        return res.status(400).json(errorResponse('Missing or invalid task ID', 400));
+      }
+
+      const task = await Task.findByPk(taskId);
+      if (!task) {
+        return res.status(404).json(errorResponse('Task not found', 404));
+      }
+
+      // CRITICAL: Ensure we're only moving tasks within the same project
+      // Get the target section to verify it belongs to the same project
+      const targetSectionId = sectionId !== undefined && sectionId !== null 
+        ? parseInt(sectionId) 
+        : task.section_id;
+      
+      if (isNaN(targetSectionId) || targetSectionId === null) {
+        return res.status(400).json(errorResponse('Invalid sectionId', 400));
+      }
+
+      // Verify target section exists and belongs to the same project as the task
+      const targetSection = await Section.findByPk(targetSectionId);
+      if (!targetSection) {
+        return res.status(404).json(errorResponse('Target section not found', 404));
+      }
+      
+      if (targetSection.project_id !== task.project_id) {
+        return res.status(400).json(errorResponse('Cannot move task to a section in a different project', 400));
+      }
+
+      // Calculate new position using beforeTaskId/afterTaskId
+      let newPosition;
+      let beforePosition = null;
+      let afterPosition = null;
+
+      // Validate that beforeTaskId and afterTaskId are not both provided
+      if (beforeTaskId && afterTaskId) {
+        return res.status(400).json(errorResponse('Cannot provide both beforeTaskId and afterTaskId', 400));
+      }
+
+      if (beforeTaskId) {
+        // Insert before this task (beforeTaskId will be after our inserted task)
+        const beforeTask = await Task.findByPk(beforeTaskId);
+        if (!beforeTask) {
+          return res.status(404).json(errorResponse('Before task not found', 404));
+        }
+        if (beforeTask.section_id !== targetSectionId) {
+          return res.status(400).json(errorResponse('Before task is not in target section', 400));
+        }
+        
+        // Prevent moving task before itself
+        if (parseInt(beforeTaskId) === parseInt(taskId)) {
+          return res.status(400).json(errorResponse('Cannot move task before itself', 400));
+        }
+        
+        // The beforeTask's position will be the afterPosition (it comes after our task)
+        afterPosition = parseFloat(beforeTask.position) || 0;
+        
+        // Get task before the beforeTask (if exists) - this will be before our inserted task
+        // Exclude both the task being moved AND the beforeTask itself
+        // This query finds the task with the highest position that is still less than beforeTask's position
+        // CRITICAL: When reordering within same section, we must exclude the task's current position
+        // by excluding its ID, which we already do via Op.notIn
+        // Also ensure we only look at tasks in the same project and section
+        const excludeIds = [parseInt(taskId), parseInt(beforeTaskId)];
+        const taskBeforeBefore = await Task.findOne({
+          where: {
+            section_id: targetSectionId,
+            project_id: task.project_id, // Ensure same project
+            deleted_at: null,
+            id: { 
+              [Op.notIn]: excludeIds
+            },
+            position: { [Op.lt]: afterPosition }
+          },
+          order: [['position', 'DESC']],
+          attributes: ['position']
+        });
+        
+        // If no task found before, beforePosition is null (inserting at start)
+        beforePosition = taskBeforeBefore ? parseFloat(taskBeforeBefore.position) : null;
+        newPosition = Task.calculatePositionBetween(beforePosition, afterPosition);
+        
+        console.log(`Calculating position with beforeTaskId ${beforeTaskId}:`, {
+          taskId: parseInt(taskId),
+          beforeTaskId: parseInt(beforeTaskId),
+          taskCurrentPosition: task.position,
+          taskCurrentSection: task.section_id,
+          targetSectionId: targetSectionId,
+          beforeTaskPosition: afterPosition,
+          taskBeforeBeforePosition: beforePosition,
+          calculatedPosition: newPosition,
+          isSameSection: task.section_id === targetSectionId,
+          excludeIds
+        });
+      } else if (afterTaskId) {
+        // Insert after this task (afterTaskId will be before our inserted task)
+        const afterTask = await Task.findByPk(afterTaskId);
+        if (!afterTask) {
+          return res.status(404).json(errorResponse('After task not found', 404));
+        }
+        if (afterTask.section_id !== targetSectionId) {
+          return res.status(400).json(errorResponse('After task is not in target section', 400));
+        }
+        
+        // Prevent moving task after itself
+        if (parseInt(afterTaskId) === parseInt(taskId)) {
+          return res.status(400).json(errorResponse('Cannot move task after itself', 400));
+        }
+        
+        // The afterTask's position will be the beforePosition (it comes before our task)
+        beforePosition = parseFloat(afterTask.position) || 0;
+        
+        // Get task after the afterTask (if exists) - this will be after our inserted task
+        // Exclude both the task being moved AND the afterTask itself
+        // This query finds the task with the lowest position that is still greater than afterTask's position
+        // CRITICAL: When reordering within same section, we must exclude the task's current position
+        // by excluding its ID, which we already do via Op.notIn
+        // Also ensure we only look at tasks in the same project and section
+        const excludeIds = [parseInt(taskId), parseInt(afterTaskId)];
+        const taskAfterAfter = await Task.findOne({
+          where: {
+            section_id: targetSectionId,
+            project_id: task.project_id, // Ensure same project
+            deleted_at: null,
+            id: { 
+              [Op.notIn]: excludeIds
+            },
+            position: { [Op.gt]: beforePosition }
+          },
+          order: [['position', 'ASC']],
+          attributes: ['position']
+        });
+        
+        // If no task found after, afterPosition is null (inserting at end)
+        afterPosition = taskAfterAfter ? parseFloat(taskAfterAfter.position) : null;
+        newPosition = Task.calculatePositionBetween(beforePosition, afterPosition);
+        
+        console.log(`Calculating position with afterTaskId ${afterTaskId}:`, {
+          taskId: parseInt(taskId),
+          afterTaskId: parseInt(afterTaskId),
+          taskCurrentPosition: task.position,
+          taskCurrentSection: task.section_id,
+          targetSectionId: targetSectionId,
+          afterTaskPosition: beforePosition,
+          taskAfterAfterPosition: afterPosition,
+          calculatedPosition: newPosition,
+          isSameSection: task.section_id === targetSectionId,
+          excludeIds
+        });
+      } else {
+        // No before/after specified - append to end of section
+        // If moving to a different section, get next position in that section
+        // If same section, get next position (which will be after all existing tasks)
+        newPosition = await Task.getNextPosition(targetSectionId);
+        console.log(`Appending task ${taskId} to end of section ${targetSectionId} at position ${newPosition}`);
+      }
+
+      // Validate the calculated position is a valid number
+      if (isNaN(newPosition) || newPosition === null || newPosition === undefined) {
+        console.error('Invalid calculated position:', newPosition);
+        return res.status(500).json(errorResponse('Failed to calculate valid position', 500));
+      }
+
+      // Ensure position is positive
+      if (newPosition <= 0) {
+        console.warn('Calculated position is not positive, using fallback:', newPosition);
+        newPosition = 1.0;
+      }
+
+      // Normalize position to float
+      newPosition = parseFloat(newPosition);
+
+      // Check if this is a same-section reorder
+      const isCrossSectionMove = targetSectionId !== task.section_id;
+      const currentPosition = parseFloat(task.position) || 0;
+
+      // Update task section and position
+      // All other properties are preserved
+      const updateData = {
+        position: newPosition
+      };
+
+      // Always update section_id if it's different (for cross-section moves)
+      // This ensures the task is moved to the correct section
+      if (isCrossSectionMove) {
+        updateData.section_id = targetSectionId;
+        console.log(`Moving task ${taskId} from section ${task.section_id} to section ${targetSectionId} at position ${newPosition}`);
+      } else {
+        // For same-section moves, ensure we update the position
+        // This is important for reordering within the same section
+        // Even if the position appears similar, we update it to ensure consistency
+        console.log(`Reordering task ${taskId} within section ${targetSectionId} from position ${currentPosition} to position ${newPosition}`);
+        
+        // Log if position hasn't changed significantly (shouldn't happen with fractional indexing)
+        if (Math.abs(newPosition - currentPosition) < 0.0001) {
+          console.warn(`Warning: Position change is very small for same-section reorder: ${currentPosition} -> ${newPosition}`);
+        }
+      }
+
+      // Perform the update
+      // Sequelize instance.update() returns the updated instance
+      await task.update(updateData, {
+        userId: req.user?.id
+      });
+
+      // Reload the task to ensure we have the latest data
+      await task.reload();
+
+      const updatedTask = await Task.findByPk(taskId, {
+        include: [
+          { model: Section, as: 'section' },
+          { model: User, as: 'assignee', attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'], required: false },
+          { model: TaskStatus, as: 'taskStatus', required: false },
+          { model: PriorityLabel, as: 'priorityLabel', required: false },
+        ],
+      });
+
+      res.json(successResponse({ task: updatedTask }, 'Task moved successfully'));
+    } catch (error) {
+      console.error('Error moving task:', error);
+      res.status(500).json(errorResponse('Failed to move task', 500));
+    }
+  };
+
   return {
     getTasksByProject,
     getTaskById,
@@ -337,6 +691,9 @@ const taskController = () => {
     deleteTask,
     toggleTaskCompletion,
     batchUpdateTasks,
+    reorderTasksInSection,
+    moveTaskToSection,
+    moveTask,
   };
 };
 module.exports = taskController;

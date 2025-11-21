@@ -235,26 +235,58 @@ const initiatePreData = async () => {
 
       // Create tasks
       if (preData.tasks && preData.tasks.length > 0 && global.sampleProject && global.sections && global.users) {
-        const tasks = await Task.bulkCreate(
-          preData.tasks.map(taskData => ({
-            project_id: global.sampleProject.id,
-            section_id: global.sections[taskData.section_index]?.id || null,
-            title: taskData.title,
-            description: taskData.description || null,
-            created_by: global.adminUser.id,
-            assigned_to: global.users[taskData.assigned_to_index]?.id || global.adminUser.id,
-            priority_label_id: taskData.priority_label_index !== undefined && taskData.priority_label_index !== null
-              ? global.priorityLabels[taskData.priority_label_index]?.id || null
-              : null,
-            task_status_id: taskData.task_status_index !== undefined && taskData.task_status_index !== null
-              ? global.taskStatuses[taskData.task_status_index]?.id || null
-              : null,
-            completed: taskData.completed || false,
-            position: taskData.position || 0,
-            start_date: taskData.start_date || taskData.due_date || null,
-            due_date: taskData.due_date || null,
-          }))
-        );
+        // Group tasks by section to calculate positions properly
+        const tasksBySection = {};
+        preData.tasks.forEach((taskData, index) => {
+          const sectionIndex = taskData.section_index || 0;
+          if (!tasksBySection[sectionIndex]) {
+            tasksBySection[sectionIndex] = [];
+          }
+          tasksBySection[sectionIndex].push({ ...taskData, originalIndex: index });
+        });
+
+        // Create tasks with proper decimal positions
+        // Process tasks section by section to maintain proper ordering
+        const allTasks = [];
+        for (const [sectionIndex, sectionTasks] of Object.entries(tasksBySection)) {
+          const sectionId = global.sections[parseInt(sectionIndex)]?.id || null;
+          
+          // Sort tasks by their position value from preData.json to maintain order
+          sectionTasks.sort((a, b) => {
+            const posA = a.position !== undefined && a.position !== null ? parseFloat(a.position) : 0;
+            const posB = b.position !== undefined && b.position !== null ? parseFloat(b.position) : 0;
+            return posA - posB;
+          });
+
+          // Assign positions: 1.0, 2.0, 3.0, etc. for each section
+          sectionTasks.forEach((taskData, taskIndex) => {
+            // Use position from preData.json if provided, otherwise calculate sequential position
+            const position = taskData.position !== undefined && taskData.position !== null
+              ? parseFloat(taskData.position)
+              : (taskIndex + 1) * 1.0;
+            
+            allTasks.push({
+              project_id: global.sampleProject.id,
+              section_id: sectionId,
+              title: taskData.title,
+              description: taskData.description || null,
+              created_by: global.adminUser.id,
+              assigned_to: global.users[taskData.assigned_to_index]?.id || global.adminUser.id,
+              priority_label_id: taskData.priority_label_index !== undefined && taskData.priority_label_index !== null
+                ? global.priorityLabels[taskData.priority_label_index]?.id || null
+                : null,
+              task_status_id: taskData.task_status_index !== undefined && taskData.task_status_index !== null
+                ? global.taskStatuses[taskData.task_status_index]?.id || null
+                : null,
+              completed: taskData.completed || false,
+              position: position, // Use decimal position (1.0, 2.0, 3.0, etc.) matching DECIMAL(20, 10) type
+              start_date: taskData.start_date || taskData.due_date || null,
+              due_date: taskData.due_date || null,
+            });
+          });
+        }
+
+        const tasks = await Task.bulkCreate(allTasks);
 
         console.log(`✅ ${tasks.length} tasks created`);
         global.tasks = tasks;
