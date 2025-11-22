@@ -1,9 +1,47 @@
 const { Task, Section, Project, User, TaskComment, Subtask, TaskStatus, PriorityLabel } = require('../models');
-const { Op } = require('sequelize');
+const { Op, Sequelize } = require('sequelize');
 const taskActivityLogger = require('../utils/taskActivityLogger');
 const { successResponse, errorResponse } = require('../utils/responseFormatter');
+const { formatTaskDate, formatTaskDateTime, formatTaskRelativeTime } = require('../utils/taskHelpers');
 
 const taskController = () => {
+  // Get my tasks
+  const getMyTasks = async (req, res) => {
+    try {
+      const userId = req.user.id;
+      
+      if (!userId) {
+        return res.status(401).json(errorResponse('User not authenticated', 401));
+      }
+
+      const tasks = await Task.findAll({
+        where: { 
+          assigned_to: userId, 
+          deleted_at: null 
+        },
+        include: [
+          { model: Section, as: 'section' },
+          { model: User, as: 'assignee', attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'], required: false },
+          { model: User, as: 'creator', attributes: ['id', 'full_name', 'email'] },
+          { model: TaskStatus, as: 'taskStatus', required: false },
+          { model: PriorityLabel, as: 'priorityLabel', required: false },
+          { model: Project, as: 'project', attributes: ['id', 'name', 'color'] },
+        ],
+        order: [
+          // MySQL-compatible NULLS LAST: ISNULL(Task.due_date) puts NULLs last (1 > 0)
+          [Sequelize.literal('ISNULL(`Task`.`due_date`)'), 'ASC'],
+          [Sequelize.literal('`Task`.`due_date`'), 'ASC'],
+          [Sequelize.literal('`Task`.`position`'), 'ASC'],
+          [Sequelize.literal('`Task`.`created_at`'), 'DESC']
+        ],
+      });
+
+      res.json(successResponse({ tasks }));
+    } catch (error) {
+      console.error('Error fetching my tasks:', error);
+      res.status(500).json(errorResponse('Failed to fetch my tasks', 500));
+    }
+  };
   // Get all tasks for a project
   const getTasksByProject = async (req, res) => {
     // Support both projectId from params and from body
@@ -683,6 +721,244 @@ const taskController = () => {
     }
   };
 
+  // Helper function to get date formatters
+  const getDateFormatters = (req) => {
+    const timezone = req.app?.locals?.timezone || process.env.APP_TIMEZONE || 'UTC';
+    return {
+      timezone,
+      formatDate: req.formatDate || ((date, format = 'DD MMM YY') => formatTaskDate(date, format, timezone)),
+      formatDateTime: req.formatDateTime || ((date, format = 'YYYY-MM-DD HH:mm:ss') => formatTaskDateTime(date, format, timezone)),
+      formatRelativeTime: req.formatRelativeTime || ((date) => formatTaskRelativeTime(date, timezone)),
+    };
+  };
+
+  // Format calendar task for my-tasks
+  const formatMyTasksCalendarTask = (task, formatters) => {
+    if (!task) {
+      return null;
+    }
+
+    const plain = task.toJSON ? task.toJSON() : task;
+    const assignee = plain.assignee || null;
+    const startDateValue = plain.start_date || plain.startDate || plain.due_date || plain.created_at || null;
+    const dueDateValue = plain.due_date || plain.dueDate || startDateValue;
+    const projectColor = plain.project?.color || '#3b82f6';
+    const initials = assignee?.initials
+      || (assignee?.full_name
+        ? assignee.full_name
+            .split(' ')
+            .map(part => part.charAt(0))
+            .join('')
+            .substring(0, 2)
+            .toUpperCase()
+        : null);
+
+    return {
+      id: plain.id?.toString(),
+      title: plain.title,
+      completed: !!plain.completed,
+      startDate: startDateValue ? formatters.formatDateTime(startDateValue, 'YYYY-MM-DD') : null,
+      dueDate: dueDateValue ? formatters.formatDateTime(dueDateValue, 'YYYY-MM-DD') : null,
+      startDateDisplay: startDateValue ? formatters.formatDate(startDateValue, 'MMM D, YYYY') : null,
+      dueDateDisplay: dueDateValue ? formatters.formatDate(dueDateValue, 'MMM D, YYYY') : null,
+      dueDateRelative: dueDateValue ? formatters.formatRelativeTime(dueDateValue) : null,
+      assigneeName: assignee?.full_name || null,
+      assigneeInitials: initials,
+      assigneeColor: assignee?.avatar_color || null,
+      userAvatar: assignee?.avatar_url || null,
+      projectId: plain.project_id ? plain.project_id.toString() : null,
+      projectName: plain.project?.name || 'Uncategorized',
+      projectColor: projectColor,
+      sectionId: plain.section_id ? plain.section_id.toString() : null,
+      sectionName: plain.section?.name || 'Uncategorized',
+    };
+  };
+
+  // Format board view task for my-tasks
+  const formatMyTasksBoardViewTask = (task, formatters) => {
+    if (!task) {
+      return null;
+    }
+    const plain = task.toJSON ? task.toJSON() : task;
+    const startDate = plain.start_date || plain.startDate || null;
+    const dueDate = plain.due_date || plain.dueDate || null;
+    const assignee = plain.assignee || null;
+    const priorityLabel = plain.priorityLabel || null;
+    const taskStatus = plain.taskStatus || null;
+
+    const initials = assignee?.initials
+      || (assignee?.full_name
+        ? assignee.full_name
+            .split(' ')
+            .map(part => part.charAt(0))
+            .join('')
+            .substring(0, 2)
+            .toUpperCase()
+        : null);
+
+    return {
+      id: plain.id?.toString(),
+      sectionId: plain.section_id ? plain.section_id.toString() : null,
+      title: plain.title,
+      description: plain.description || '',
+      completed: !!plain.completed,
+      order: typeof plain.position === 'number' ? plain.position : 0,
+      startDate,
+      startDateDisplay: startDate ? formatters.formatDate(startDate, 'MMM D, YYYY') : null,
+      dueDate,
+      dueDateDisplay: dueDate ? formatters.formatDate(dueDate, 'MMM D, YYYY') : null,
+      dueDateRelative: dueDate ? formatters.formatRelativeTime(dueDate) : null,
+      assigneeName: assignee?.full_name || null,
+      assigneeInitials: initials,
+      assigneeColor: assignee?.avatar_color || null,
+      userAvatar: assignee?.avatar_url || null,
+      priorityLabel: priorityLabel
+        ? {
+            id: priorityLabel.id?.toString(),
+            name: priorityLabel.name,
+            color: priorityLabel.color || null,
+          }
+        : null,
+      status: taskStatus
+        ? {
+            id: taskStatus.id?.toString(),
+            name: taskStatus.name,
+            color: taskStatus.color || null,
+          }
+        : null,
+      projectId: plain.project_id ? plain.project_id.toString() : null,
+      projectName: plain.project?.name || 'Uncategorized',
+      projectColor: plain.project?.color || '#3b82f6',
+    };
+  };
+
+  // Get my tasks calendar view data
+  const getMyTasksCalendarViewData = async (req, res) => {
+    try {
+      const userId = req.user.id;
+      
+      if (!userId) {
+        return res.status(401).json(errorResponse('User not authenticated', 401));
+      }
+
+      const formatters = getDateFormatters(req);
+
+      const tasks = await Task.findAll({
+        where: { 
+          assigned_to: userId, 
+          deleted_at: null 
+        },
+        include: [
+          { model: Section, as: 'section' },
+          { model: User, as: 'assignee', attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'], required: false },
+          { model: TaskStatus, as: 'taskStatus', required: false },
+          { model: PriorityLabel, as: 'priorityLabel', required: false },
+          { model: Project, as: 'project', attributes: ['id', 'name', 'color'] },
+        ],
+        order: [
+          [Sequelize.literal('ISNULL(`Task`.`due_date`)'), 'ASC'],
+          [Sequelize.literal('`Task`.`due_date`'), 'ASC'],
+          [Sequelize.literal('`Task`.`start_date`'), 'ASC'],
+          [Sequelize.literal('`Task`.`updated_at`'), 'DESC'],
+        ],
+      });
+
+      const calendarTasks = tasks
+        .map(task => formatMyTasksCalendarTask(task, formatters))
+        .filter(Boolean);
+
+      return res.json(successResponse({
+        project: {
+          id: 'my-tasks',
+          name: 'My Tasks',
+          color: null,
+        },
+        tasks: calendarTasks,
+      }));
+    } catch (error) {
+      console.error('Error fetching my tasks calendar view data:', error);
+      return res.status(500).json(errorResponse('Failed to fetch my tasks calendar data', 500));
+    }
+  };
+
+  // Get my tasks board view data
+  const getMyTasksBoardViewData = async (req, res) => {
+    try {
+      const userId = req.user.id;
+      
+      if (!userId) {
+        return res.status(401).json(errorResponse('User not authenticated', 401));
+      }
+
+      const formatters = getDateFormatters(req);
+
+      // Get all tasks assigned to user
+      const tasks = await Task.findAll({
+        where: { 
+          assigned_to: userId, 
+          deleted_at: null 
+        },
+        include: [
+          { model: Section, as: 'section' },
+          { model: User, as: 'assignee', attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'], required: false },
+          { model: TaskStatus, as: 'taskStatus', required: false },
+          { model: PriorityLabel, as: 'priorityLabel', required: false },
+          { model: Project, as: 'project', attributes: ['id', 'name', 'color'] },
+        ],
+        order: [
+          [Sequelize.literal('`Task`.`position`'), 'ASC'],
+          [Sequelize.literal('`Task`.`updated_at`'), 'ASC'],
+        ],
+      });
+
+      // Group tasks by section (across all projects)
+      const sectionMap = new Map();
+      
+      tasks.forEach(task => {
+        const plain = task.toJSON ? task.toJSON() : task;
+        const sectionId = plain.section_id ? plain.section_id.toString() : 'uncategorized';
+        const sectionName = plain.section?.name || 'Uncategorized';
+        const projectName = plain.project?.name || 'Uncategorized';
+        
+        // Create section key: project_section or just section
+        const sectionKey = `${plain.project_id || 'uncategorized'}_${sectionId}`;
+        
+        if (!sectionMap.has(sectionKey)) {
+          sectionMap.set(sectionKey, {
+            id: sectionKey,
+            title: `${projectName} - ${sectionName}`,
+            order: plain.section?.position || 0,
+            taskCount: 0,
+            tasks: [],
+          });
+        }
+        
+        const section = sectionMap.get(sectionKey);
+        const formattedTask = formatMyTasksBoardViewTask(task, formatters);
+        if (formattedTask) {
+          section.tasks.push(formattedTask);
+          section.taskCount++;
+        }
+      });
+
+      // Convert map to array and sort by order
+      const columns = Array.from(sectionMap.values())
+        .sort((a, b) => a.order - b.order);
+
+      return res.json(successResponse({
+        project: {
+          id: 'my-tasks',
+          name: 'My Tasks',
+          color: null,
+        },
+        columns,
+      }));
+    } catch (error) {
+      console.error('Error fetching my tasks board view data:', error);
+      return res.status(500).json(errorResponse('Failed to fetch my tasks board view data', 500));
+    }
+  };
+
   return {
     getTasksByProject,
     getTaskById,
@@ -694,6 +970,9 @@ const taskController = () => {
     reorderTasksInSection,
     moveTaskToSection,
     moveTask,
+    getMyTasks,
+    getMyTasksCalendarViewData,
+    getMyTasksBoardViewData,
   };
 };
 module.exports = taskController;

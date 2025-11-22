@@ -197,23 +197,7 @@ const mailController = () => {
         offset: parseInt(offset)
       });
 
-      const formattedMails = mails.map(mail => ({
-        id: mail.id.toString(),
-        sender: mail.sender?.full_name || 'You',
-        senderEmail: mail.sender?.email || '',
-        senderAvatarUrl: mail.sender?.avatar_url,
-        senderAvatarColor: mail.sender?.avatar_color,
-        recipient: mail.recipient?.full_name || 'Unknown',
-        recipientEmail: mail.recipient?.email || '',
-        subject: mail.subject,
-        preview: mail.body.length > 90 ? `${mail.body.substring(0, 87)}...` : mail.body,
-        body: mail.body,
-        timestamp: mail.created_at,
-        isRead: mail.is_read,
-        isStarred: mail.is_starred
-      }));
-
-      res.json(successResponse({ mails: formattedMails }));
+      res.json(successResponse({ mails: formatMails(mails) }));
     } catch (error) {
       console.error('Error fetching sent mails:', error);
       res.status(500).json(errorResponse(`Failed to fetch sent mails: ${error.message}`, 500));
@@ -427,6 +411,36 @@ const mailController = () => {
     }
   };
 
+  // Get sent emails
+  const getSentEmails = async (req, res) => {
+    const userId = req.user.id;
+    const { limit = 50, offset = 0 } = req.query;
+
+    const mails = await Mail.findAll({
+      where: {
+        sender_id: userId,
+        deleted_at: null
+      },
+      include: [
+        {
+          model: User,
+          as: 'sender',
+          attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials']
+        },
+        {
+          model: User,
+          as: 'recipient',
+          attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials']
+        }
+      ],
+      order: [['created_at', 'DESC']],
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+    res.json(successResponse({ mails: formatMails(mails) }));
+  };
+
   return {
     getInboxMails,
     getUnreadMails,
@@ -436,7 +450,8 @@ const mailController = () => {
     getMailById,
     sendMail,
     updateMail,
-    deleteMail
+    deleteMail,
+    getSentEmails
   };
 };
 

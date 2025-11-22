@@ -12,7 +12,8 @@ const {
   getMailById,
   sendMail,
   updateMail,
-  deleteMail
+  deleteMail,
+  getSentEmails
 } = mailController();
 
 // All routes require authentication
@@ -28,6 +29,8 @@ router.get('/:mailId', getMailById);
 router.post('/', sendMail); // sendMail uses req.body for params
 router.put('/:mailId', updateMail);
 router.delete('/:mailId', deleteMail);
+// list of sent emails
+router.get('/sent-emails', getSentEmails);
 
 module.exports = router;
 
