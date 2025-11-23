@@ -1,0 +1,941 @@
+{
+	"info": {
+		"_postman_id": "cf9ce554-cdf8-477c-8e3f-e7f33b347569",
+		"name": "Planora API",
+		"description": "Complete API collection for Planora Task Management System",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "34617745"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.token) {",
+									"        pm.environment.set(\"authToken\", jsonData.data.token);",
+									"        pm.environment.set(\"userId\", jsonData.data.user.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"full_name\": \"John Doe\",\n  \"email\": \"john@planora.com\",\n  \"password\": \"john123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users/register",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", "register"]
+						},
+						"description": "Register a new user account"
+					},
+					"response": []
+				},
+				{
+					"name": "Login User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.token) {",
+									"        pm.environment.set(\"authToken\", jsonData.data.token);",
+									"        pm.environment.set(\"userId\", jsonData.data.user.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@planora.com\",\n  \"password\": \"admin123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", "login"]
+						},
+						"description": "Login with email and password"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Firebase Token",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/firebase-token",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", "firebase-token"]
+						},
+						"description": "Get Firebase custom token for real-time chat authentication"
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints"
+		},
+		{
+			"name": "Users",
+			"item": [
+				{
+					"name": "Get Current User Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/profile",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", "profile"]
+						},
+						"description": "Get the currently authenticated user's profile"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Current User Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"full_name\": \"John Doe Updated\",\n  \"avatar_url\": \"https://example.com/avatar.jpg\",\n  \"avatar_color\": \"#3b82f6\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users/profile",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", "profile"]
+						},
+						"description": "Update the currently authenticated user's profile"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Users",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users"]
+						},
+						"description": "Get all users (admin operation)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User By ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/:userId",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", ":userId"],
+							"variable": [
+								{
+									"key": "userId",
+									"value": "1",
+									"description": "User ID"
+								}
+							]
+						},
+						"description": "Get a specific user by ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Update User",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"full_name\": \"Updated Name\",\n  \"email\": \"updated@planora.com\",\n  \"status\": \"active\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users/:userId",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", ":userId"],
+							"variable": [
+								{
+									"key": "userId",
+									"value": "1",
+									"description": "User ID"
+								}
+							]
+						},
+						"description": "Update a user (admin operation)"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete User",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/:userId",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", ":userId"],
+							"variable": [
+								{
+									"key": "userId",
+									"value": "2",
+									"description": "User ID"
+								}
+							]
+						},
+						"description": "Delete a user (soft delete, admin operation)"
+					},
+					"response": []
+				}
+			],
+			"description": "User management endpoints"
+		},
+		{
+			"name": "Channels",
+			"item": [
+				{
+					"name": "Start Direct Message",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.channel) {",
+									"        pm.environment.set(\"channelId\", jsonData.data.channel.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": 2\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/channels/direct",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "channels", "direct"]
+						},
+						"description": "Start a 1:1 direct message conversation with another user. Returns existing conversation if one already exists."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Direct Messages",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/channels/direct",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "channels", "direct"]
+						},
+						"description": "Get all direct message conversations for the current user"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Channel",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.channel) {",
+									"        pm.environment.set(\"channelId\", jsonData.data.channel.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"General Discussion\",\n  \"description\": \"Channel for general team discussions\",\n  \"type\": \"group\",\n  \"memberIds\": [2, 3]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/channels",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "channels"]
+						},
+						"description": "Create a new channel (group, public, or private). For direct messages, set type to 'direct' and provide exactly one memberId."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Channels",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/channels?type=group&archived=false",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "channels"],
+							"query": [
+								{
+									"key": "type",
+									"value": "group",
+									"description": "Filter by type: direct, group, public, private",
+									"disabled": true
+								},
+								{
+									"key": "archived",
+									"value": "false",
+									"description": "Filter archived channels",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get all channels for the current user. Optional query params: type (direct/group/public/private), archived (true/false)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Channel By ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/channels/:channelId",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "channels", ":channelId"],
+							"variable": [
+								{
+									"key": "channelId",
+									"value": "{{channelId}}",
+									"description": "Channel ID"
+								}
+							]
+						},
+						"description": "Get a specific channel by ID. User must be a member."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Channel",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Channel Name\",\n  \"description\": \"Updated description\",\n  \"is_archived\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/channels/:channelId",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "channels", ":channelId"],
+							"variable": [
+								{
+									"key": "channelId",
+									"value": "{{channelId}}",
+									"description": "Channel ID"
+								}
+							]
+						},
+						"description": "Update channel details. Only owners and admins can update. Direct message channels cannot be updated."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Channel",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/channels/:channelId",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "channels", ":channelId"],
+							"variable": [
+								{
+									"key": "channelId",
+									"value": "{{channelId}}",
+									"description": "Channel ID"
+								}
+							]
+						},
+						"description": "Delete a channel (soft delete). Only the channel owner can delete."
+					},
+					"response": []
+				},
+				{
+					"name": "Add Member to Channel",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": 3\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/channels/:channelId/members",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "channels", ":channelId", "members"],
+							"variable": [
+								{
+									"key": "channelId",
+									"value": "{{channelId}}",
+									"description": "Channel ID"
+								}
+							]
+						},
+						"description": "Add a member to a channel. Only owners and admins can add members. Cannot add members to direct message channels."
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Member from Channel",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/channels/:channelId/members/:memberId",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "channels", ":channelId", "members", ":memberId"],
+							"variable": [
+								{
+									"key": "channelId",
+									"value": "{{channelId}}",
+									"description": "Channel ID"
+								},
+								{
+									"key": "memberId",
+									"value": "2",
+									"description": "Member User ID"
+								}
+							]
+						},
+						"description": "Remove a member from a channel. Users can remove themselves, or owners/admins can remove others. Cannot remove channel owner."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Member Role",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"role\": \"admin\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/channels/:channelId/members/:memberId/role",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "channels", ":channelId", "members", ":memberId", "role"],
+							"variable": [
+								{
+									"key": "channelId",
+									"value": "{{channelId}}",
+									"description": "Channel ID"
+								},
+								{
+									"key": "memberId",
+									"value": "2",
+									"description": "Member User ID"
+								}
+							]
+						},
+						"description": "Update a member's role (owner, admin, or member). Only channel owner can update roles."
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Messages as Read",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"firestoreMessageIds\": [\"messageId1\", \"messageId2\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/channels/:channelId/mark-read",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "channels", ":channelId", "mark-read"],
+							"variable": [
+								{
+									"key": "channelId",
+									"value": "{{channelId}}",
+									"description": "Channel ID"
+								}
+							]
+						},
+						"description": "Mark messages as read for the current user in a channel. Optionally provide Firestore message IDs."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Unread Counts",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/channels/unread-counts",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "channels", "unread-counts"]
+						},
+						"description": "Get unread message counts for all channels the user is a member of"
+					},
+					"response": []
+				},
+				{
+					"name": "Test Firebase Connection",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/channels/test/firebase",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "channels", "test", "firebase"]
+						},
+						"description": "Test Firebase connection and list existing channels in Firestore"
+					},
+					"response": []
+				}
+			],
+			"description": "Channel management endpoints for chat functionality"
+		},
+		{
+			"name": "Messages",
+			"item": [
+				{
+					"name": "Send Message",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.message) {",
+									"        pm.environment.set(\"messageId\", jsonData.data.message.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"Hello! This is a test message.\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/channels/:channelId/messages",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "channels", ":channelId", "messages"],
+							"variable": [
+								{
+									"key": "channelId",
+									"value": "{{channelId}}",
+									"description": "Channel ID"
+								}
+							]
+						},
+						"description": "Send a message to a channel (group or direct message). Message is stored in Firestore at chat_channels/{channelId}/messages/{messageId}"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Messages",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/channels/:channelId/messages?limit=50",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "channels", ":channelId", "messages"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "50",
+									"description": "Number of messages to fetch (default: 50)",
+									"disabled": false
+								},
+								{
+									"key": "before",
+									"value": "",
+									"description": "Message ID for pagination (get messages before this ID)",
+									"disabled": true
+								}
+							],
+							"variable": [
+								{
+									"key": "channelId",
+									"value": "{{channelId}}",
+									"description": "Channel ID"
+								}
+							]
+						},
+						"description": "Get messages from a channel. Supports pagination using the 'before' query parameter with a message ID."
+					},
+					"response": []
+				}
+			],
+			"description": "Message endpoints for sending and retrieving messages in channels"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:2019",
+			"type": "string"
+		},
+		{
+			"key": "authToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "userId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "channelId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "messageId",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

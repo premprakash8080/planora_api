@@ -3,6 +3,7 @@ const { User } = require('../models');
 const { Op, Sequelize } = require('sequelize');
 const { issueJWT } = require('../utils/issueJWT');
 const { successResponse, errorResponse } = require('../utils/responseFormatter');
+const { generateFirebaseToken } = require('../services/firebase-sync.service');
 
 // Register new user
 
@@ -377,6 +378,30 @@ const userController = () => {
     }
   };
 
+  // Get Firebase custom token for current user
+  const getFirebaseToken = async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const user = await User.findByPk(userId, {
+        attributes: ['id', 'full_name', 'email'],
+      });
+
+      if (!user) {
+        return res.status(404).json(errorResponse('User not found', 404));
+      }
+
+      const firebaseToken = await generateFirebaseToken(userId, {
+        email: user.email,
+        full_name: user.full_name,
+      });
+
+      res.json(successResponse({ firebaseToken }));
+    } catch (error) {
+      console.error('Error generating Firebase token:', error);
+      res.status(500).json(errorResponse(`Failed to generate Firebase token: ${error.message}`, 500));
+    }
+  };
+
   return {
     register,
     login,
@@ -386,6 +411,7 @@ const userController = () => {
     getUserById,
     updateUser,
     deleteUser,
+    getFirebaseToken,
   };
 
 }

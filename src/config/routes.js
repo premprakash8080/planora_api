@@ -46,6 +46,9 @@ exports.set_routes = (app) => {
   // Project Messages Routes (all protected)
   const projectMessages = require("../routes/projectMessages");
   
+  // Channel Routes (all protected)
+  const channels = require("../routes/channels");
+  
   // API Routes
   app.use("/api/users", users);
   app.use("/api/projects", projects);
@@ -63,4 +66,5 @@ exports.set_routes = (app) => {
   app.use("/api/board-view", boardView);
   app.use("/api/timeline-view", timelineView);
   app.use("/api/project-messages", projectMessages);
+  app.use("/api/channels", channels);
 };
