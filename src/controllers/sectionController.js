@@ -1,4 +1,4 @@
-const { Section, Project, Task, User, TaskComment } = require('../models');
+const { Section, Project, Task, User, TaskComment, TaskStatus, PriorityLabel } = require('../models');
 const { successResponse, errorResponse } = require('../utils/responseFormatter');
 
 const sectionController = () => {
@@ -23,7 +23,8 @@ const sectionController = () => {
             model: Task, 
             as: 'tasks', 
             where: { 
-              deleted_at: null
+              deleted_at: null,
+              project_id: projectIdValue // Ensure tasks belong to the same project
             },
             required: false,
             include: [
@@ -31,6 +32,16 @@ const sectionController = () => {
                 model: User, 
                 as: 'assignee', 
                 attributes: ['id', 'full_name', 'email', 'avatar_url', 'avatar_color', 'initials'], 
+                required: false 
+              },
+              { 
+                model: TaskStatus, 
+                as: 'taskStatus', 
+                required: false 
+              },
+              { 
+                model: PriorityLabel, 
+                as: 'priorityLabel', 
                 required: false 
               },
               { 
@@ -45,10 +56,10 @@ const sectionController = () => {
               },
               // Note: childTasks (subtasks) removed - parent_id column doesn't exist in database
             ],
-            order: [['position', 'ASC']]
+            order: [['position', 'ASC']] // Order tasks by position within each section
           },
         ],
-        order: [['position', 'ASC']],
+        order: [['position', 'ASC']], // Order sections by position
       });
       
       res.json(successResponse({ sections }));

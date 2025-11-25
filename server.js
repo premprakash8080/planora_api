@@ -6,6 +6,8 @@ const dbService = require("./src/services/db.service");
 const cors = require("cors");
 const morgan = require("morgan");
 const moment = require("moment-timezone");
+const { firestore, auth } = require("./src/config/firebase-admin");
+
 const environment = process.env.NODE_ENV;
 const DEFAULT_TIMEZONE = process.env.APP_TIMEZONE || "Asia/Kolkata";
 moment.tz.setDefault(DEFAULT_TIMEZONE);
@@ -14,9 +16,9 @@ var app = express();
 app.locals.timezone = DEFAULT_TIMEZONE;
 
 const DB = dbService(environment, config.migrate).start();
+
 // parse application/x-www-form-urlencoded
 app.use(cors());
-// app.use(express.urlencoded());
 
 morgan.token("date", (req, res, tz) => {
   return moment().tz("Asia/Kolkata").format("YYYY-MM-DD hh:mmA");
@@ -46,21 +48,27 @@ app.use((req, res, next) => {
   next();
 });
 
+// Firebase middleware - attach Firestore and Auth to request
+app.use((req, res, next) => {
+  req.db = firestore;
+  req.auth = auth;
+  next();
+});
+
 // parse application/json
 app.use(bodyParser.json());
 
 app.get("/", function (req, res) {
   res.send("Api working!");
 });
+
 require("./src/config/routes").set_routes(app);
 
 // Error handling middleware (must be last)
-// 404 handler for routes that don't exist
 const { notFound, errorHandler } = require('./src/middleware/errorHandler');
 app.use(notFound);
 app.use(errorHandler);
 
-//connectDb();
 app.listen(config.port, () => {
   if (
     environment !== "production" &&
@@ -72,5 +80,17 @@ app.listen(config.port, () => {
     );
     process.exit(1);
   }
+
+  console.log(`Server on port ${config.port} with ${environment} config...`);
   return DB;
 });
+
+// const firebaseConfig = {
+//   apiKey: "AIzaSyCArEkC1Ykn975QZ1RXf_2WBvDg7KHMmGw",
+//   authDomain: "planora-9b2ef.firebaseapp.com",
+//   projectId: "planora-9b2ef",
+//   storageBucket: "planora-9b2ef.firebasestorage.app",
+//   messagingSenderId: "451847027508",
+//   appId: "1:451847027508:web:2d210b7929ed60e6994361",
+//   measurementId: "G-7SDMXS54BN"
+// };

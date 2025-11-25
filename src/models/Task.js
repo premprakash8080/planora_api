@@ -58,7 +58,8 @@ const Task = database.define('Task', {
     defaultValue: 0,
   },
   position: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.DECIMAL(20, 10),
+    allowNull: false,
     defaultValue: 0,
   },
   // Note: parent_id commented out - column doesn't exist in database yet
@@ -201,6 +202,134 @@ Task.beforeUpdate(async (task, options) => {
     console.error('Failed to prepare task update activity log:', error);
   }
 });
+
+/**
+ * Helper method to get the next position for a new task in a section
+ * @param {number} sectionId - The section ID
+ * @returns {Promise<number>} - The next position value
+ */
+Task.getNextPosition = async function(sectionId) {
+  try {
+    if (!sectionId) {
+      console.warn('getNextPosition called with invalid sectionId:', sectionId);
+      return 1.0;
+    }
+
+    const lastTask = await this.findOne({
+      where: {
+        section_id: sectionId,
+        deleted_at: null
+      },
+      order: [['position', 'DESC']],
+      attributes: ['position']
+    });
+
+    if (!lastTask || lastTask.position === null || lastTask.position === undefined) {
+      // No tasks in section, start at position 1.0
+      return 1.0;
+    }
+
+    // Convert to number if it's a string (Sequelize DECIMAL returns as string)
+    const lastPosition = parseFloat(lastTask.position);
+    if (isNaN(lastPosition)) {
+      console.warn('Invalid position value found:', lastTask.position);
+      return 1.0;
+    }
+
+    return lastPosition + 1.0;
+  } catch (error) {
+    console.error('Error getting next position:', error);
+    return 1.0; // Default fallback
+  }
+};
+
+/**
+ * Helper method to calculate position between two positions
+ * Used for inserting tasks between existing tasks
+ * @param {number} beforePosition - Position before the insertion point (null if inserting at start)
+ * @param {number} afterPosition - Position after the insertion point (null if inserting at end)
+ * @returns {number} - The calculated position
+ */
+Task.calculatePositionBetween = function(beforePosition, afterPosition) {
+  // Handle null/undefined values
+  const before = (beforePosition !== null && beforePosition !== undefined) ? parseFloat(beforePosition) : null;
+  const after = (afterPosition !== null && afterPosition !== undefined) ? parseFloat(afterPosition) : null;
+
+  // Case 1: Inserting at the start (no task before, but there's a task after)
+  if (before === null && after !== null) {
+    // Insert before the first task - use half of the after position
+    const afterPos = parseFloat(after);
+    if (isNaN(afterPos)) {
+      console.warn('Invalid afterPosition value:', afterPosition);
+      return 0.5;
+    }
+    // Ensure we get a valid position between 0 and afterPos
+    return afterPos > 0 ? afterPos / 2.0 : 0.5;
+  }
+
+  // Case 2: Inserting at the end (there's a task before, but no task after)
+  if (before !== null && after === null) {
+    // Insert after the last task - add 1.0 to the before position
+    const beforePos = parseFloat(before);
+    if (isNaN(beforePos)) {
+      console.warn('Invalid beforePosition value:', beforePosition);
+      return 1.0;
+    }
+    return beforePos + 1.0;
+  }
+
+  // Case 3: Inserting between two tasks (both before and after exist)
+  if (before !== null && after !== null) {
+    const beforePos = parseFloat(before);
+    const afterPos = parseFloat(after);
+    
+    // Validate both positions are numbers
+    if (isNaN(beforePos) || isNaN(afterPos)) {
+      console.warn('Invalid position values:', { beforePosition, afterPosition });
+      return beforePos && !isNaN(beforePos) ? beforePos + 1.0 : 1.0;
+    }
+    
+    // Safety check: ensure after is greater than before
+    if (afterPos <= beforePos) {
+      console.warn('Invalid position range: after <= before', {
+        beforePos,
+        afterPos,
+        difference: afterPos - beforePos
+      });
+      // If positions are equal or invalid, add 0.5 to before position
+      return beforePos + 0.5;
+    }
+    
+    // Calculate average position (midpoint)
+    const avg = (beforePos + afterPos) / 2.0;
+    
+    // Validate the calculated average is between before and after
+    if (avg <= beforePos || avg >= afterPos) {
+      console.warn('Calculated average is not between positions, using fallback', {
+        beforePos,
+        afterPos,
+        avg
+      });
+      return beforePos + 0.5;
+    }
+    
+    // If positions are too close (less than 0.0001 apart), use fallback
+    // This is a safety mechanism, but with DECIMAL(20, 10) we have plenty of precision
+    if (Math.abs(afterPos - beforePos) < 0.0001) {
+      console.warn('Positions too close, using fallback', {
+        beforePos,
+        afterPos,
+        difference: Math.abs(afterPos - beforePos)
+      });
+      return beforePos + 0.5;
+    }
+
+    return avg;
+  }
+
+  // Case 4: No tasks in section (both are null) - start at position 1.0
+  return 1.0;
+};
 
 module.exports = Task;
 

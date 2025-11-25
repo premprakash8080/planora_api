@@ -22,6 +22,9 @@ const CustomFieldValue = require('./CustomFieldValue');
 const TaskReaction = require('./TaskReaction');
 const InboxNotification = require('./InboxNotification');
 const ProjectMessage = require('./ProjectMessage');
+const Channel = require('./Channel');
+const ChannelMember = require('./ChannelMember');
+const ChannelMessageRead = require('./ChannelMessageRead');
 
 // Define associations
 // User associations
@@ -163,6 +166,21 @@ InboxNotification.belongsTo(Project, { foreignKey: 'project_id', as: 'project' }
 ProjectMessage.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 ProjectMessage.belongsTo(User, { foreignKey: 'author_id', as: 'author' });
 
+// Channel associations
+Channel.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+Channel.hasMany(ChannelMember, { foreignKey: 'channel_id', as: 'members' });
+Channel.hasMany(ChannelMessageRead, { foreignKey: 'channel_id', as: 'messageReads' });
+User.hasMany(Channel, { foreignKey: 'created_by', as: 'createdChannels' });
+
+// ChannelMember associations
+ChannelMember.belongsTo(Channel, { foreignKey: 'channel_id', as: 'channel' });
+ChannelMember.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(ChannelMember, { foreignKey: 'user_id', as: 'channelMemberships' });
+
+// ChannelMessageRead associations
+ChannelMessageRead.belongsTo(Channel, { foreignKey: 'channel_id', as: 'channel' });
+ChannelMessageRead.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
 module.exports = {
   User,
   Team,
@@ -188,5 +206,8 @@ module.exports = {
   TaskReaction,
   InboxNotification,
   ProjectMessage,
+  Channel,
+  ChannelMember,
+  ChannelMessageRead,
 };
 
