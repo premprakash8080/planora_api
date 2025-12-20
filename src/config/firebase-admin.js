@@ -1,9 +1,11 @@
 /**
  * Firebase Admin SDK - Auto-initialized singleton
  * 
- * Automatically initializes on require using firebase.json configuration.
+ * Automatically initializes on require using environment variables (.env) or firebase.json configuration.
  * Exports Firestore and Auth instances directly.
  * Gracefully handles missing credentials without breaking the app.
+ * 
+ * Priority: Environment variables > firebase.json > Application Default Credentials
  */
 
 const admin = require('firebase-admin');
@@ -32,37 +34,53 @@ const initialize = () => {
   }
 
   try {
-    const firebaseConfig = require('./firebase.json');
+    // Try to get Firebase config from environment variables first
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
 
-    // Check if firebase.json contains service account credentials
-    // Service account files have: project_id, private_key, client_email
-    const hasServiceAccount = firebaseConfig.private_key && firebaseConfig.client_email;
-    const projectId = firebaseConfig.project_id || firebaseConfig.projectId;
+    // Fallback to firebase.json if env vars are not set (for backward compatibility)
+    let firebaseConfig = null;
+    if (!projectId || !privateKey || !clientEmail) {
+      try {
+        firebaseConfig = require('./firebase.json');
+      } catch (e) {
+        // firebase.json doesn't exist or can't be read
+      }
+    }
 
-    if (!projectId) {
-      console.warn('⚠️  Firebase Admin not initialized: Missing project ID in firebase.json');
+    // Use environment variables if available, otherwise fallback to firebase.json
+    const hasServiceAccount = (privateKey && clientEmail) || (firebaseConfig && firebaseConfig.private_key && firebaseConfig.client_email);
+    const finalProjectId = projectId || (firebaseConfig && (firebaseConfig.project_id || firebaseConfig.projectId));
+
+    if (!finalProjectId) {
+      console.warn('⚠️  Firebase Admin not initialized: Missing project ID. Set FIREBASE_PROJECT_ID in .env or firebase.json');
       return { firestore: null, auth: null, isReady: false };
     }
 
     // If service account credentials are available, use them directly
     if (hasServiceAccount) {
       try {
+        const finalPrivateKey = privateKey || firebaseConfig.private_key;
+        const finalClientEmail = clientEmail || firebaseConfig.client_email;
+
         admin.initializeApp({
           credential: admin.credential.cert({
-            projectId: projectId,
-            privateKey: firebaseConfig.private_key.replace(/\\n/g, '\n'),
-            clientEmail: firebaseConfig.client_email,
+            projectId: finalProjectId,
+            privateKey: finalPrivateKey.replace(/\\n/g, '\n'),
+            clientEmail: finalClientEmail,
           }),
-          projectId: projectId,
+          projectId: finalProjectId,
           databaseURL: process.env.FIREBASE_DATABASE_URL ||
-            `https://${projectId}-default-rtdb.firebaseio.com`,
+            `https://${finalProjectId}-default-rtdb.firebaseio.com`,
         });
 
         firestore = admin.firestore();
         auth = admin.auth();
         isReady = true;
 
-        console.log('✅ Firebase Admin initialized (Service Account from firebase.json)');
+        const source = privateKey ? 'environment variables' : 'firebase.json';
+        console.log(`✅ Firebase Admin initialized (Service Account from ${source})`);
         return { firestore, auth, isReady: true };
       } catch (certError) {
         console.error('❌ Error initializing with service account:', certError.message);
@@ -88,8 +106,9 @@ const initialize = () => {
       // No credentials found - graceful fallback
       console.warn('⚠️  Firebase Admin not initialized: Missing credentials');
       console.warn('   Options:');
-      console.warn('   1. Add service account credentials (private_key, client_email) to firebase.json');
-      console.warn('   2. Use Application Default Credentials (gcloud auth application-default login)');
+      console.warn('   1. Set FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, and FIREBASE_CLIENT_EMAIL in .env file');
+      console.warn('   2. Add service account credentials (private_key, client_email) to firebase.json');
+      console.warn('   3. Use Application Default Credentials (gcloud auth application-default login)');
       return { firestore: null, auth: null, isReady: false };
     }
 
